@@ -1,8 +1,6 @@
-use std::any::TypeId;
-
 use lemon_ecs_macros::Component;
 
-use crate::{query::Query, world::World};
+use crate::{world::World};
 
 use crate::component::Component;
 
@@ -28,31 +26,6 @@ pub fn world_get_component() {
 
     assert_eq!(velocity.0, 3, "Velocity x should be 3");
     assert_eq!(velocity.1, 4, "Velocity y should be 4");
-}
-
-#[test]
-pub fn world_iter() {
-    let mut world = World::new();
-
-    let entity = world.spawn();
-    world.add_component::<Position>(entity, Position(1, 2));
-
-    let mut query = world.iter(Query::new(vec![
-        TypeId::of::<Position>(),
-        TypeId::of::<Velocity>(),
-    ]));
-
-    assert!(
-        query.next().is_none(),
-        "Query should not return any entities because the Velocity component is missing"
-    );
-
-    let mut query = world.iter(Query::new(vec![TypeId::of::<Position>()]));
-    
-    assert!(
-        query.next().is_some(),
-        "Query should return an entity because the Position component is present"
-    );
 }
 
 #[test]
