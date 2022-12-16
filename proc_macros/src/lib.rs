@@ -83,7 +83,7 @@ pub fn impl_query(input: TokenStream) -> TokenStream {
                 Query::new(vec![#(TypeId::of::<#idents>()),*])
             }
 
-            fn map_entity(archetype: &'a Archetype, id: usize) -> Self::Item {
+            fn map_entity(archetype: &'a EntityStorage, id: usize) -> Self::Item {
                 (#(#idents::map_entity(archetype, id)),*)
             }
         }

@@ -1,13 +1,10 @@
 use std::{any::TypeId, cell::RefCell, collections::HashMap, iter::Peekable};
 
 use crate::{
-    component::ComponentBundle,
-    query::{QueryComparison, QueryIter},
-    sparse_set::Keys,
+    query::{QueryComparison, QueryIter}, storage::{entities::EntityStorage, bundle::ComponentBundle, sparse_set::Keys},
 };
 
 use super::{
-    archetype::Archetype,
     component::Component,
     query::{Query, Queryable},
 };
@@ -15,7 +12,7 @@ use super::{
 pub struct World {
     next_id: usize,
     available_ids: Vec<usize>,
-    archetypes: Vec<Archetype>,
+    archetypes: Vec<EntityStorage>,
     query_cache: RefCell<HashMap<(Query, Query), QueryComparison>>,
     archetype_cache: RefCell<HashMap<Query, Vec<usize>>>,
 }
@@ -25,7 +22,7 @@ impl World {
         Self {
             next_id: 0,
             available_ids: Vec::new(),
-            archetypes: vec![Archetype::new()],
+            archetypes: vec![EntityStorage::new()],
             query_cache: RefCell::new(HashMap::new()),
             archetype_cache: RefCell::new(HashMap::new()),
         }
@@ -62,7 +59,7 @@ impl World {
             .map(|archetype| archetype.0)
     }
 
-    fn archetype_of(&self, id: usize) -> Option<&Archetype> {
+    fn archetype_of(&self, id: usize) -> Option<&EntityStorage> {
         self.archetype_of_idx(id).map(|idx| &self.archetypes[idx])
     }
 
@@ -99,7 +96,7 @@ impl World {
             .unwrap_or(false)
     }
 
-    fn add_archetype(&mut self, archetype: Archetype) -> usize {
+    fn add_archetype(&mut self, archetype: EntityStorage) -> usize {
         let idx = self.archetypes.len();
         self.archetypes.push(archetype);
 
@@ -182,13 +179,13 @@ impl World {
     }
 }
 
-struct ArchetypeIter<'a> {
-    archetypes: &'a [Archetype],
+struct EntityStorageIter<'a> {
+    archetypes: &'a [EntityStorage],
     indices: std::vec::IntoIter<usize>,
 }
 
-impl<'a> Iterator for ArchetypeIter<'a> {
-    type Item = &'a Archetype;
+impl<'a> Iterator for EntityStorageIter<'a> {
+    type Item = &'a EntityStorage;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.indices.next().map(|idx| &self.archetypes[idx])
@@ -196,14 +193,14 @@ impl<'a> Iterator for ArchetypeIter<'a> {
 }
 
 pub struct EntityIter<'a> {
-    archetypes: Peekable<ArchetypeIter<'a>>,
+    archetypes: Peekable<EntityStorageIter<'a>>,
     entities: Option<Keys<'a, usize>>,
 }
 
 impl<'a> EntityIter<'a> {
-    fn new(archetypes: &'a Vec<Archetype>, indices: Vec<usize>) -> Self{
+    fn new(archetypes: &'a Vec<EntityStorage>, indices: Vec<usize>) -> Self{
         Self {
-            archetypes: ArchetypeIter {
+            archetypes: EntityStorageIter {
                 archetypes: archetypes.as_slice(),
                 indices: indices.into_iter()
             }
@@ -212,7 +209,7 @@ impl<'a> EntityIter<'a> {
         }
     }
 
-    pub(crate) fn get_archetype(&mut self) -> Option<&'a Archetype> {
+    pub(crate) fn get_archetype(&mut self) -> Option<&'a EntityStorage> {
         self.archetypes.peek().copied()
     }
 }

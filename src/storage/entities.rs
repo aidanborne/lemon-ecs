@@ -1,25 +1,18 @@
-use std::{
-    any::TypeId,
-    collections::HashMap, fmt::Debug,
-};
+use std::{any::TypeId, collections::HashMap, fmt::Debug};
 
-use crate::{
-    component::{Component, ComponentBundle, ComponentStorage},
-    query::Query,
-};
+use crate::{component::Component, query::Query};
 
-use super::sparse_set::SparseSet;
+use super::{bundle::ComponentBundle, components::ComponentStorage, sparse_set::SparseSet};
 
-pub struct Archetype {
+pub struct EntityStorage {
     entities: SparseSet<usize>,
     components: HashMap<TypeId, Box<dyn ComponentStorage>>,
 }
 
-impl Archetype {
+impl EntityStorage {
     pub fn new() -> Self {
         Self {
             entities: SparseSet::new(),
-            //edges: HashMap::new(),
             components: HashMap::new(),
         }
     }
@@ -28,7 +21,7 @@ impl Archetype {
         let mut components: HashMap<TypeId, _> = HashMap::new();
 
         for (type_id, storage) in self.components.iter() {
-            components.insert(*type_id, storage.as_empty_box());
+            components.insert(*type_id, storage.as_empty_boxed());
         }
 
         components.insert(TypeId::of::<T>(), Box::new(SparseSet::<T>::new()));
@@ -44,7 +37,7 @@ impl Archetype {
 
         for (type_id, storage) in self.components.iter() {
             if *type_id != TypeId::of::<T>() {
-                components.insert(*type_id, storage.as_empty_box());
+                components.insert(*type_id, storage.as_empty_boxed());
             }
         }
 
@@ -58,22 +51,22 @@ impl Archetype {
         &mut self,
         id: usize,
         component: T,
-    ) -> Result<(), ArchetypeError> {
+    ) -> Result<(), EntityErr> {
         if !self.entities.contains(id) {
-            return Err(ArchetypeError::MissingEntity(id));
+            return Err(EntityErr::MissingEntityInArchetype(id));
         }
 
-        let type_id = component.get_type_id();
+        let type_id = TypeId::of::<T>();
 
         if let Some(component_storage) = self.components.get_mut(&type_id) {
             component_storage.insert(id, Box::new(component));
             Ok(())
         } else {
-            Err(ArchetypeError::MissingStorage(type_id))
+            Err(EntityErr::MissingStorageInArchetype(type_id))
         }
     }
 
-    pub fn insert(&mut self, id: usize, mut bundle: ComponentBundle) -> Result<(), ArchetypeError> {
+    pub fn insert(&mut self, id: usize, mut bundle: ComponentBundle) -> Result<(), EntityErr> {
         if !self.entities.contains(id) {
             self.entities.insert(id, id);
         }
@@ -82,16 +75,16 @@ impl Archetype {
             if let Some(component) = bundle.remove(type_id) {
                 storage.insert(id, component);
             } else {
-                return Err(ArchetypeError::MissingBundle(id, *type_id));
+                return Err(EntityErr::MissingComponentInBundle(id, *type_id));
             }
         }
 
         Ok(())
     }
 
-    pub fn remove<'a>(&'a mut self, id: usize) -> Result<ComponentBundle, ArchetypeError> {
+    pub fn remove<'a>(&'a mut self, id: usize) -> Result<ComponentBundle, EntityErr> {
         if !self.entities.contains(id) {
-            return Err(ArchetypeError::MissingEntity(id));
+            return Err(EntityErr::MissingEntityInArchetype(id));
         }
 
         self.entities.remove(id);
@@ -102,7 +95,7 @@ impl Archetype {
             if let Some(component) = storage.remove(id) {
                 bundle.insert(component);
             } else {
-                return Err(ArchetypeError::MissingComponent(id, *type_id));
+                return Err(EntityErr::MissingComponentInArchetype(id, *type_id));
             }
         }
 
@@ -117,44 +110,50 @@ impl Archetype {
         self.components.contains_key(&type_id)
     }
 
-    pub fn get_component<T: 'static + Component>(&self, id: usize) -> Result<&T, ArchetypeError> {
+    pub fn get_component<T: 'static + Component>(&self, id: usize) -> Result<&T, EntityErr> {
         let type_id = TypeId::of::<T>();
 
         if let Some(component_storage) = self.components.get(&type_id) {
             if let Some(component) = component_storage.as_any().downcast_ref::<SparseSet<T>>() {
                 return component
                     .get(id)
-                    .ok_or(ArchetypeError::MissingComponent(id, type_id));
+                    .ok_or(EntityErr::MissingComponentInArchetype(id, type_id));
             }
         }
 
-        Err(ArchetypeError::MissingStorage(type_id))
+        Err(EntityErr::MissingStorageInArchetype(type_id))
     }
 
     pub fn get_query(&self) -> Query {
         Query::new(self.components.keys().cloned().collect())
     }
 
-    pub fn iter(&self) -> crate::sparse_set::Keys<usize> {
+    pub fn iter(&self) -> super::sparse_set::Keys<usize> {
         self.entities.keys()
     }
 }
 
 #[derive(Clone, Copy)]
-pub enum ArchetypeError {
-    MissingBundle(usize, TypeId),
-    MissingStorage(TypeId),
-    MissingComponent(usize, TypeId),
-    MissingEntity(usize),
+pub enum EntityErr {
+    MissingComponentInBundle(usize, TypeId),
+    MissingStorageInArchetype(TypeId),
+    MissingComponentInArchetype(usize, TypeId),
+    MissingEntityInArchetype(usize),
 }
 
-impl Debug for ArchetypeError {
+impl Debug for EntityErr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::MissingBundle(id, type_id) => write!(f, "Entity #{} is missing component with {:?} in bundle", id, type_id),
-            Self::MissingStorage(type_id) => write!(f, "Archetype is missing storage for {:?}", type_id),
-            Self::MissingComponent(id, type_id) => write!(f, "Entity #{} is missing component with {:?} in archetype", id, type_id),
-            Self::MissingEntity(id) => write!(f, "Entity #{} is missing in archetype", id),
+            Self::MissingComponentInBundle(id, type_id) => {
+                write!(f, "Bundle is missing {:?} for entity #{}", type_id, id)
+            }
+            Self::MissingStorageInArchetype(type_id) => {
+                write!(f, "Archetype is missing storage for {:?}", type_id)
+            }
+            Self::MissingComponentInArchetype(id, type_id) => {
+                write!(f, "Archetype is missing {:?} for entity #{}", type_id, id)
+            }
+            Self::MissingEntityInArchetype(id) => write!(f, "Entity #{} is not in archetype", id),
         }
     }
 }
