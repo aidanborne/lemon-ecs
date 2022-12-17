@@ -1,8 +1,7 @@
 use lemon_ecs_macros::Component;
 
-use crate::{world::World};
-
-use crate::component::Component;
+use crate::World;
+extern crate self as lemon_ecs;
 
 #[derive(Component)]
 struct Position(u32, u32);

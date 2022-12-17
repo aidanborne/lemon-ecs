@@ -1,55 +1,58 @@
-use std::{any::TypeId, collections::HashSet};
+use std::{iter::Peekable, marker::PhantomData};
 
-pub mod queryable;
-pub mod result;
+use crate::storage::{entities::EntityStorage, sparse_set};
 
-#[derive(PartialEq, Clone, Copy)]
-pub enum QueryComparison {
-    Exact,
-    Partial,
-    None,
+mod archetype;
+mod queryable;
+
+pub use queryable::*;
+pub use archetype::*;
+
+pub struct Query<'a, T: Queryable<'a>> {
+    archetypes: &'a [EntityStorage],
+    indices: Peekable<std::vec::IntoIter<usize>>,
+    entities: Option<sparse_set::Keys<'a, usize>>,
+    _marker: PhantomData<T>,
 }
 
-impl QueryComparison {
-    pub fn is_exact(&self) -> bool {
-        matches!(self, QueryComparison::Exact)
+impl<'a, T: Queryable<'a>> Query<'a, T> {
+    pub fn new(archetypes: &'a Vec<EntityStorage>, indices: Vec<usize>) -> Self {
+        Self {
+            archetypes,
+            indices: indices.into_iter().peekable(),
+            entities: None,
+            _marker: PhantomData,
+        }
     }
 
-    pub fn is_some(&self) -> bool {
-        !matches!(self, QueryComparison::None)
-    }
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Query(Vec<TypeId>);
-
-impl Query {
-    pub fn new(type_ids: Vec<TypeId>) -> Self {
-        Self(type_ids)
+    fn peek_archetype(&mut self) -> Option<&'a EntityStorage> {
+        self.indices.peek().map(|idx| &self.archetypes[*idx])
     }
 
-    pub fn normalize(&self) -> Self {
-        let mut type_ids = self.0.clone();
-        type_ids.sort();
-        type_ids.dedup();
-        Self::new(type_ids)
-    }
+    fn next_entity(&mut self) -> Option<usize> {
+        loop {
+            if let Some(entities) = &mut self.entities {
+                if let Some(id) = entities.next() {
+                    return Some(id);
+                }
 
-    pub fn compare_to(&self, other: &Query) -> QueryComparison {
-        let mut set: HashSet<&TypeId> = other.0.iter().collect();
-
-        for type_id in &self.0 {
-            if !set.contains(type_id) {
-                return QueryComparison::None;
+                self.indices.next();
             }
 
-            set.remove(type_id);
+            if let Some(archetype) = self.peek_archetype() {
+                self.entities = Some(archetype.iter());
+            } else {
+                return None;
+            }
         }
+    }
+}
 
-        if set.is_empty() {
-            QueryComparison::Exact
-        } else {
-            QueryComparison::Partial
-        }
+impl<'a, T: Queryable<'a>> Iterator for Query<'a, T> {
+    type Item = T::Result;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next_entity()
+            .map(|id| T::map_entity(self.peek_archetype().unwrap(), id))
     }
 }

@@ -1,6 +1,10 @@
-use proc_macro::{TokenStream};
-use quote::{quote, format_ident};
-use syn::{*, parse::{Parse, ParseStream}, token::Comma};
+use proc_macro::TokenStream;
+use quote::{format_ident, quote};
+use syn::{
+    parse::{Parse, ParseStream},
+    token::Comma,
+    *,
+};
 
 #[proc_macro_derive(Component)]
 pub fn derive_component(input: TokenStream) -> TokenStream {
@@ -8,7 +12,7 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
     let name = &ast.ident;
 
     let gen = quote! {
-        impl Component for #name { }
+        impl lemon_ecs::Component for #name { }
     };
 
     gen.into()
@@ -36,58 +40,21 @@ pub fn for_tuples(input: TokenStream) -> TokenStream {
     let tuples = parse_macro_input!(input as ForTuplesInput);
     let macro_ident = tuples.ident;
 
-    let type_idents: Vec<Ident> = (tuples.start..tuples.end).map(|i| format_ident!("{}{}", "T", i)).collect();
+    let type_idents: Vec<Ident> = (tuples.start..tuples.end)
+        .map(|i| format_ident!("{}{}", "T", i))
+        .collect();
 
     let mut tokens = TokenStream::new();
 
     for i in tuples.start..(tuples.end - 1) {
         let type_idents = &type_idents[0..i];
 
-        let ast = quote!{
+        let ast = quote! {
             #macro_ident!(#(#type_idents),*);
         };
-       
+
         tokens.extend::<TokenStream>(ast.into());
     }
 
-    tokens   
-}
-
-struct QueryInput {
-    idents: Vec<Ident>,
-}
-
-impl Parse for QueryInput {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let mut idents = Vec::new();
-        while !input.is_empty() {
-            idents.push(input.parse::<Ident>()?);
-            if !input.is_empty() {
-                input.parse::<Comma>()?;
-            }
-        }
-        Ok(QueryInput { idents })
-    }
-}
-
-#[proc_macro]
-pub fn impl_query(input: TokenStream) -> TokenStream {
-    let query = parse_macro_input!(input as QueryInput);
-    let idents = query.idents;
-
-    let ast = quote!{
-        impl<'a, #(#idents: 'static + Queryable<'a>),*> Queryable<'a> for (#(#idents),*) {
-            type Item = (#(#idents::Item),*);
-
-            fn get_query() -> Query {
-                Query::new(vec![#(TypeId::of::<#idents>()),*])
-            }
-
-            fn map_entity(archetype: &'a EntityStorage, id: usize) -> Self::Item {
-                (#(#idents::map_entity(archetype, id)),*)
-            }
-        }
-    };
-    
-    ast.into()
+    tokens
 }

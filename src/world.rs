@@ -2,16 +2,14 @@ use std::{any::TypeId, cell::RefCell, collections::HashMap};
 
 use crate::{
     component::Component,
-    query::{Query, QueryComparison, result::QueryResult, queryable::Queryable},
+    query::{Archetype, Matching, Queryable, Query},
     storage::{bundle::ComponentBundle, entities::EntityStorage},
 };
 
-/// Manages the entity storages. Each storage is an archetype.
-/// 0 is the default archetype, which is always present.
 pub struct World {
     archetype_storage: Vec<EntityStorage>,
-    query_storage_cache: RefCell<HashMap<Query, Vec<usize>>>,
-    query_comp_cache: RefCell<HashMap<(Query, Query), QueryComparison>>,
+    storage_cache: RefCell<HashMap<Archetype, Vec<usize>>>,
+    match_cache: RefCell<HashMap<(Archetype, Archetype), Matching>>,
     available_ids: Vec<usize>,
     next_id: usize,
 }
@@ -20,30 +18,31 @@ impl World {
     pub fn new() -> Self {
         Self {
             archetype_storage: vec![EntityStorage::new()],
-            query_storage_cache: RefCell::new(HashMap::new()),
-            query_comp_cache: RefCell::new(HashMap::new()),
+            storage_cache: RefCell::new(HashMap::new()),
+            match_cache: RefCell::new(HashMap::new()),
             available_ids: Vec::new(),
             next_id: 0,
         }
     }
 
-    fn compare_query(&self, query: &Query, other: &Query) -> QueryComparison {
-        let mut cache = self.query_comp_cache.borrow_mut();
+    fn compare_archetypes(&self, archetype: &Archetype, other: &Archetype) -> Matching {
+        let mut cache = self.match_cache.borrow_mut();
+        let key = (archetype.clone(), other.clone());
 
-        match cache.get(&(query.clone(), other.clone())) {
-            Some(comparison) => comparison.clone(),
+        match cache.get(&key) {
+            Some(matching) => matching.clone(),
             None => {
-                let comparison = query.compare_to(other);
-                cache.insert((query.clone(), other.clone()), comparison.clone());
-                comparison
+                let matching = archetype.matches(other);
+                cache.insert(key, matching.clone());
+                matching
             }
         }
     }
 
-    fn get_archetype_idx_all(&self, query: &Query) -> Vec<usize> {
-        let mut cache = self.query_storage_cache.borrow_mut();
+    fn get_archetype_idx_all(&self, archetype: &Archetype) -> Vec<usize> {
+        let mut cache = self.storage_cache.borrow_mut();
 
-        match cache.get(query) {
+        match cache.get(archetype) {
             Some(indices) => indices.clone(),
             None => {
                 let indices: Vec<_> = self
@@ -51,25 +50,27 @@ impl World {
                     .iter()
                     .enumerate()
                     .filter(|(_, storage)| {
-                        self.compare_query(query, &storage.get_query()).is_some()
+                        !self
+                            .compare_archetypes(archetype, &storage.get_archetype())
+                            .is_none()
                     })
                     .map(|(idx, _)| idx)
                     .collect();
 
-                cache.insert(query.clone(), indices.clone());
+                cache.insert(archetype.clone(), indices.clone());
                 indices
             }
         }
     }
 
-    /// Returns the index of the storage that matches the query exactly.
+    /// Returns the index of the storage that matches the archetype exactly.
     /// Used to avoid having two mutable references to the same storage.
-    fn get_archetype_idx_exact(&self, query: &Query) -> Option<usize> {
-        self.get_archetype_idx_all(query)
+    fn get_archetype_idx_exact(&self, archetype: &Archetype) -> Option<usize> {
+        self.get_archetype_idx_all(archetype)
             .iter()
             .copied()
             .find(|idx| {
-                self.compare_query(query, &self.archetype_storage[*idx].get_query())
+                self.compare_archetypes(archetype, &self.archetype_storage[*idx].get_archetype())
                     .is_exact()
             })
     }
@@ -96,10 +97,10 @@ impl World {
         let idx = self.archetype_storage.len();
         self.archetype_storage.push(storage);
 
-        let storage_query = self.archetype_storage[idx].get_query();
+        let storage_query = self.archetype_storage[idx].get_archetype();
 
-        for (query, indices) in self.query_storage_cache.borrow_mut().iter_mut() {
-            if self.compare_query(query, &storage_query).is_some() {
+        for (archetype, indices) in self.storage_cache.borrow_mut().iter_mut() {
+            if !self.compare_archetypes(archetype, &storage_query).is_none() {
                 indices.push(idx);
             }
         }
@@ -138,13 +139,13 @@ impl World {
         if let Some(curr_idx) = self.get_entity_storage_idx(id) {
             if self.archetype_storage[curr_idx].has_component(TypeId::of::<T>()) {
                 self.archetype_storage[curr_idx]
-                    .replace(id, component)
+                    .replace_component(id, component)
                     .unwrap();
             } else {
                 let mut bundle = self.archetype_storage[curr_idx].remove(id).unwrap();
                 bundle.insert(Box::new(component));
 
-                match self.get_archetype_idx_exact(&bundle.get_query()) {
+                match self.get_archetype_idx_exact(&bundle.get_archetype()) {
                     Some(idx) => {
                         self.archetype_storage[idx].insert(id, bundle).unwrap();
                     }
@@ -164,7 +165,7 @@ impl World {
                 let mut bundle = self.archetype_storage[curr_idx].remove(id).unwrap();
                 bundle.remove(&TypeId::of::<T>());
 
-                match self.get_archetype_idx_exact(&bundle.get_query()) {
+                match self.get_archetype_idx_exact(&bundle.get_archetype()) {
                     Some(idx) => {
                         self.archetype_storage[idx].insert(id, bundle).unwrap();
                     }
@@ -184,9 +185,9 @@ impl World {
             .and_then(|archetype| archetype.get_component::<T>(id).ok())
     }
 
-    pub fn query<'a, T: 'static + Queryable<'a>>(&'a self) -> QueryResult<'a, T> {
-        let query = T::get_query();
-        let indices = self.get_archetype_idx_all(&query);
-        QueryResult::new(&self.archetype_storage, indices)
+    pub fn query<'a, T: 'static + Queryable<'a>>(&'a self) -> Query<'a, T> {
+        let archetype = T::get_archetype();
+        let indices = self.get_archetype_idx_all(&archetype);
+        Query::new(&self.archetype_storage, indices)
     }
 }

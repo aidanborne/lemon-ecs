@@ -1,6 +1,6 @@
 use std::{any::TypeId, collections::HashMap, fmt::Debug};
 
-use crate::{component::Component, query::Query};
+use crate::{component::Component, query::Archetype};
 
 use super::{bundle::ComponentBundle, components::ComponentStorage, sparse_set::SparseSet};
 
@@ -47,7 +47,7 @@ impl EntityStorage {
         }
     }
 
-    pub fn replace<T: 'static + Component>(
+    pub fn replace_component<T: 'static + Component>(
         &mut self,
         id: usize,
         component: T,
@@ -124,8 +124,8 @@ impl EntityStorage {
         Err(EntityErr::MissingStorageInArchetype(type_id))
     }
 
-    pub fn get_query(&self) -> Query {
-        Query::new(self.components.keys().cloned().collect())
+    pub fn get_archetype(&self) -> Archetype {
+        self.components.keys().cloned().collect()
     }
 
     pub fn iter(&self) -> super::sparse_set::Keys<usize> {
