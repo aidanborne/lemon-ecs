@@ -5,48 +5,48 @@ use crate::{
 use lemon_ecs_macros::all_tuples;
 use std::any::TypeId;
 
-pub trait QueryFetch<'a> {
-    type Result;
+pub trait QueryFetch {
+    type Result<'a>;
 
     fn get_type_ids() -> Vec<TypeId>;
 
-    fn get_result(entity: Entity, storage: &'a EntityStorage) -> Self::Result;
+    fn get_result<'a>(entity: Entity, storage: &'a EntityStorage) -> Self::Result<'a>;
 }
 
-impl<'a, T: 'static + Component> QueryFetch<'a> for T {
-    type Result = &'a T;
+impl<T: 'static + Component> QueryFetch for T {
+    type Result<'a> = &'a T;
 
     fn get_type_ids() -> Vec<TypeId> {
         vec![TypeId::of::<T>()]
     }
 
-    fn get_result(entity: Entity, storage: &'a EntityStorage) -> Self::Result {
+    fn get_result<'a>(entity: Entity, storage: &'a EntityStorage) -> Self::Result<'a> {
         storage.get_component::<T>(entity.idx()).unwrap()
     }
 }
 
-impl QueryFetch<'_> for usize {
-    type Result = usize;
+impl QueryFetch for usize {
+    type Result<'a> = usize;
 
     fn get_type_ids() -> Vec<TypeId> {
         vec![]
     }
 
-    fn get_result(entity: Entity, _storage: &EntityStorage) -> Self::Result {
+    fn get_result<'a>(entity: Entity, _storage: &'a EntityStorage) -> Self::Result<'a> {
         entity.id()
     }
 }
 
 macro_rules! impl_query_fetch {
     ($($t:ident),*) => {
-        impl<'a, $($t: 'static + Component + QueryFetch<'a>),*> QueryFetch<'a> for ($($t,)*) {
-            type Result = ($($t::Result,)*);
+        impl<$($t: 'static + Component + QueryFetch),*> QueryFetch for ($($t,)*) {
+            type Result<'a> = ($($t::Result<'a>,)*);
 
             fn get_type_ids() -> Vec<TypeId> {
                 vec![$(TypeId::of::<$t>()),*]
             }
 
-            fn get_result(entity: Entity, storage: &'a EntityStorage) -> Self::Result {
+            fn get_result<'a>(entity: Entity, storage: &'a EntityStorage) -> Self::Result<'a> {
                 ($($t::get_result(entity, storage),)*)
             }
         }

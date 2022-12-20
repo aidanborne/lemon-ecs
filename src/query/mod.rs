@@ -12,14 +12,14 @@ pub mod fetch;
 pub mod filter;
 pub mod pattern;
 
-pub struct Query<'a, Fetch: QueryFetch<'a> + 'a, Filter: QueryFilter + 'a = ()> {
+pub struct Query<'a, Fetch: QueryFetch, Filter: QueryFilter = ()> {
     archetypes: Peekable<archetypes::Iter<'a>>,
     entities: Option<entities::Iter<'a>>,
     _fetch: PhantomData<Fetch>,
     _filter: PhantomData<Filter>,
 }
 
-impl<'a, Fetch: QueryFetch<'a>, Filter: QueryFilter> Query<'a, Fetch, Filter> {
+impl<'a, Fetch: QueryFetch, Filter: QueryFilter> Query<'a, Fetch, Filter> {
     pub fn new(archetypes: archetypes::Iter<'a>) -> Self {
         Self {
             archetypes: archetypes.peekable(),
@@ -52,8 +52,8 @@ impl<'a, Fetch: QueryFetch<'a>, Filter: QueryFilter> Query<'a, Fetch, Filter> {
     }
 }
 
-impl<'a, Fetch: QueryFetch<'a>, Filter: QueryFilter> Iterator for Query<'a, Fetch, Filter> {
-    type Item = Fetch::Result;
+impl<'a, Fetch: QueryFetch, Filter: QueryFilter> Iterator for Query<'a, Fetch, Filter> {
+    type Item = Fetch::Result<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.next_entity()
@@ -62,7 +62,7 @@ impl<'a, Fetch: QueryFetch<'a>, Filter: QueryFilter> Iterator for Query<'a, Fetc
 }
 
 pub trait Queryable<'a> {
-    type Fetch: QueryFetch<'a> + 'static;
+    type Fetch: QueryFetch + 'static;
     type Filter: QueryFilter + 'static;
 
     fn get_pattern() -> QueryPattern {
@@ -70,12 +70,12 @@ pub trait Queryable<'a> {
     }
 }
 
-impl<'a, T: QueryFetch<'a> + 'static> Queryable<'a> for T {
+impl<'a, T: QueryFetch + 'static> Queryable<'a> for T {
     type Fetch = Self;
     type Filter = ();
 }
 
-impl<'a, Fetch: QueryFetch<'a> + 'static, Filter: QueryFilter + 'static> Queryable<'a>
+impl<'a, Fetch: QueryFetch + 'static, Filter: QueryFilter + 'static> Queryable<'a>
     for Query<'a, Fetch, Filter>
 {
     type Fetch = Fetch;

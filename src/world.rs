@@ -17,7 +17,7 @@ impl World {
         Self {
             available_ids: Vec::new(),
             next_id: 0,
-            archetypes: ArchetypeArena::new(),
+            archetypes: Default::default(),
         }
     }
 
@@ -99,7 +99,7 @@ impl World {
             .and_then(|idx| self.archetypes[idx].get_component::<T>(id))
     }
 
-    pub fn query<'a, T: Queryable<'a>>(&'a mut self) -> Query<T::Fetch, T::Filter> {
+    pub fn query<'a, T: Queryable<'a>>(&'a self) -> Query<'a, T::Fetch, T::Filter> {
         Query::new(self.archetypes.query_archetypes::<T>())
     }
 }
