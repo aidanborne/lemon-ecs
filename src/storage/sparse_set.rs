@@ -4,9 +4,9 @@ pub struct SparseSet<T> {
     len: usize,
 }
 
-struct Entry<T> {
-    key: usize,
-    value: T,
+pub struct Entry<T> {
+    pub key: usize,
+    pub value: T,
 }
 
 #[allow(dead_code)]
@@ -23,7 +23,7 @@ impl<T> SparseSet<T> {
         self.len
     }
 
-    fn dense_idx(&self, key: usize) -> Option<usize> {
+    pub fn dense_idx(&self, key: usize) -> Option<usize> {
         if key >= self.sparse.len() {
             return None;
         }
@@ -91,10 +91,8 @@ impl<T> SparseSet<T> {
         }
     }
 
-    pub fn iter(&self) -> Iter<'_, T> {
-        Iter {
-            dense: self.dense.iter(),
-        }
+    pub fn iter(&self) -> std::slice::Iter<'_, Entry<T>> {
+        self.dense.iter()
     }
 
     pub fn keys(&self) -> Keys<'_, T> {
@@ -130,17 +128,7 @@ impl<T> Default for SparseSet<T> {
     }
 }
 
-pub struct Iter<'a, T> {
-    dense: std::slice::Iter<'a, Entry<T>>,
-}
-
-impl<'a, T> Iterator for Iter<'a, T> {
-    type Item = (usize, &'a T);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.dense.next().map(|entry| (entry.key, &entry.value))
-    }
-}
+pub type Iter<'a, T> = std::slice::Iter<'a, Entry<T>>;
 
 pub struct Keys<'a, T> {
     dense: std::slice::Iter<'a, Entry<T>>,

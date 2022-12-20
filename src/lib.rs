@@ -1,14 +1,7 @@
-mod component;
-mod world;
-mod query;
-
-mod storage;
+pub mod component;
+pub mod query;
+pub mod storage;
+pub mod world;
 
 #[cfg(test)]
 mod tests;
-
-pub use component::Component;
-pub use world::World;
-pub use query::Query;
-
-pub use storage::bundle::ComponentBundle;

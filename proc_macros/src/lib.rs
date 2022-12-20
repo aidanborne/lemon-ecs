@@ -12,45 +12,55 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
     let name = &ast.ident;
 
     let gen = quote! {
-        impl lemon_ecs::Component for #name { }
+        impl lemon_ecs::component::Component for #name {
+            fn create_storage(&self) -> Box<dyn lemon_ecs::storage::components::ComponentVec> {
+                Box::new(Vec::<#name>::new())
+            }
+
+            fn component_id(&self) -> std::any::TypeId {
+                std::any::TypeId::of::<#name>()
+            }
+        }
     };
 
     gen.into()
 }
 
-struct ForTuplesInput {
+struct TupleRanges {
     ident: Ident,
     start: usize,
     end: usize,
 }
 
-impl Parse for ForTuplesInput {
+impl Parse for TupleRanges {
     fn parse(input: ParseStream) -> Result<Self> {
         let ident = input.parse::<Ident>()?;
         input.parse::<Comma>()?;
+
         let start = input.parse::<LitInt>()?.base10_parse::<usize>()?;
-        input.parse::<Comma>()?;
+        input.parse::<Token![..]>()?;
+
         let end = input.parse::<LitInt>()?.base10_parse::<usize>()?;
-        Ok(ForTuplesInput { ident, start, end })
+        Ok(TupleRanges { ident, start, end })
     }
 }
 
 #[proc_macro]
-pub fn for_tuples(input: TokenStream) -> TokenStream {
-    let tuples = parse_macro_input!(input as ForTuplesInput);
-    let macro_ident = tuples.ident;
+pub fn all_tuples(input: TokenStream) -> TokenStream {
+    let tuples = parse_macro_input!(input as TupleRanges);
+    let macro_name = tuples.ident;
 
-    let type_idents: Vec<Ident> = (tuples.start..tuples.end)
-        .map(|i| format_ident!("{}{}", "T", i))
+    let idents: Vec<Ident> = (0..tuples.end)
+        .map(|i| format_ident!("T{}", i + 1))
         .collect();
 
     let mut tokens = TokenStream::new();
 
-    for i in tuples.start..(tuples.end - 1) {
-        let type_idents = &type_idents[0..i];
+    for i in tuples.start..tuples.end {
+        let idents = &idents[0..i];
 
         let ast = quote! {
-            #macro_ident!(#(#type_idents),*);
+            #macro_name!(#(#idents),*);
         };
 
         tokens.extend::<TokenStream>(ast.into());

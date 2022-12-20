@@ -1,34 +1,38 @@
-use std::any::{Any, TypeId};
+use std::any::Any;
 
 use crate::component::Component;
 
-use super::sparse_set::SparseSet;
+/// A trait for a vector of components.
+/// The indices of the vector do not correspond to the entity id.
+pub trait ComponentVec {
+    fn as_any(&self) -> &dyn Any;
 
-pub trait ComponentStorage {
-  fn as_any(&self) -> &dyn Any;
+    fn insert(&mut self, id: usize, component: Box<dyn Component>);
+    fn remove(&mut self, id: usize) -> Box<dyn Component>;
 
-  fn insert(&mut self, id: usize, component: Box<dyn Any>);
-  fn remove(&mut self, id: usize) -> Option<Box<dyn Any>>;
-
-  fn as_empty_boxed(&self) -> Box<dyn ComponentStorage>;
+    fn as_empty_boxed(&self) -> Box<dyn ComponentVec>;
 }
 
-impl<T: 'static + Component> ComponentStorage for SparseSet<T> {
-  fn as_any(&self) -> &dyn Any {
-      self
-  }
+impl<T: 'static + Component> ComponentVec for Vec<T> {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 
-  fn insert(&mut self, id: usize, component: Box<dyn Any>) {
-      if (*component).type_id() == TypeId::of::<T>() {
-         self.insert(id, *component.downcast::<T>().unwrap());
-      }
-  }
+    fn insert(&mut self, idx: usize, component: Box<dyn Component>) {
+        if let Ok(component) = component.downcast::<T>() {
+            if idx >= self.capacity() {
+                self.reserve(idx - self.capacity() + 1);
+            }
 
-  fn remove(&mut self, id: usize) -> Option<Box<dyn Any>> {
-      self.remove(id).map(|component| Box::new(component) as Box<dyn Any>)
-  }
+            self.insert(idx, *component);
+        }
+    }
 
-  fn as_empty_boxed(&self) -> Box<dyn ComponentStorage> {
-      Box::new(Self::new())
-  }
+    fn remove(&mut self, idx: usize) -> Box<dyn Component> {
+        Box::new(self.swap_remove(idx))
+    }
+
+    fn as_empty_boxed(&self) -> Box<dyn ComponentVec> {
+        Box::new(Self::new())
+    }
 }

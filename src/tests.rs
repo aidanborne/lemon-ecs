@@ -1,12 +1,17 @@
 use lemon_ecs_macros::Component;
 
-use crate::World;
+use crate::{
+    query::{filter::Without, Query},
+    world::World,
+};
+
+/// Needed to make the macros work
 extern crate self as lemon_ecs;
 
-#[derive(Component)]
+#[derive(Component, PartialEq, Eq, Debug)]
 struct Position(u32, u32);
 
-#[derive(Component)]
+#[derive(Component, PartialEq, Eq, Debug)]
 struct Velocity(u32, u32);
 
 #[test]
@@ -15,34 +20,70 @@ pub fn world_get_component() {
     let entity = world.spawn();
 
     world.add_component::<Position>(entity, Position(1, 2));
-    world.add_component::<Velocity>(entity, Velocity(3, 4));
 
-    let position = world.get_component::<Position>(entity).unwrap();
-    let velocity = world.get_component::<Velocity>(entity).unwrap();
+    let position = world.get_component::<Position>(entity);
+    let velocity = world.get_component::<Velocity>(entity);
 
-    assert_eq!(position.0, 1, "Position x should be 1");
-    assert_eq!(position.1, 2, "Position y should be 2");
-
-    assert_eq!(velocity.0, 3, "Velocity x should be 3");
-    assert_eq!(velocity.1, 4, "Velocity y should be 4");
+    assert_eq!(
+        position.unwrap(),
+        &Position(1, 2),
+        "Position should be (1, 2)"
+    );
+    assert!(velocity.is_none(), "Velocity should be None");
 }
 
 #[test]
-pub fn world_query() {
+pub fn world_query_basic() {
     let mut world = World::new();
 
     let entity = world.spawn();
     world.add_component::<Position>(entity, Position(1, 2));
 
     let mut query = world.query::<Position>();
-    assert!(
-        query.next().is_some(),
-        "Query should return an entity because the Position component is present"
-    );
+
+    let position = query.next().unwrap();
+    assert_eq!(position, &Position(1, 2), "Position should be (1, 2)");
+    assert!(query.next().is_none(), "Query should be empty");
 
     let mut query = world.query::<(Position, Velocity)>();
-    assert!(
-        query.next().is_none(),
-        "Query should not return any entities because the Velocity component is missing"
-    );
+    assert!(query.next().is_none(), "Query should be empty");
+}
+
+#[test]
+pub fn world_query_filters() {
+    let mut world = World::new();
+
+    let entity = world.spawn();
+    world.add_component::<Position>(entity, Position(1, 2));
+    world.add_component::<Velocity>(entity, Velocity(3, 4));
+
+    let mut query = world.query::<Query<Position>>();
+
+    let position = query.next().unwrap();
+    assert_eq!(position, &Position(1, 2), "Position should be (1, 2)");
+    assert!(query.next().is_none(), "Query should be empty");
+
+    let mut query = world.query::<Query<Position, Without<Velocity>>>();
+    assert!(query.next().is_none(), "Query should be empty");
+}
+
+#[test]
+pub fn world_multiple_entities() {
+    let mut world = World::new();
+
+    let entity1 = world.spawn();
+    world.add_component::<Position>(entity1, Position(1, 2));
+
+    let entity2 = world.spawn();
+    world.add_component::<Position>(entity2, Position(3, 4));
+
+    let mut query = world.query::<Position>();
+
+    let position = query.next().unwrap();
+    assert_eq!(position, &Position(1, 2), "Position should be (1, 2)");
+
+    let position = query.next().unwrap();
+    assert_eq!(position, &Position(3, 4), "Position should be (3, 4)");
+
+    assert!(query.next().is_none(), "Query should be empty");
 }

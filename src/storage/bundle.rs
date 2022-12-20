@@ -1,34 +1,62 @@
-use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
-};
+use std::ops::{Deref, DerefMut};
 
-use crate::query::Archetype;
+use crate::component::Component;
 
 pub struct ComponentBundle {
-    components: HashMap<TypeId, Box<dyn Any>>,
+    components: Vec<Box<dyn Component>>,
 }
 
 impl ComponentBundle {
     pub fn new() -> Self {
         Self {
-            components: HashMap::new(),
+            components: Vec::new(),
         }
     }
 
-    pub fn insert(&mut self, component: Box<dyn Any>) {
-        self.components.insert((*component).type_id(), component);
+    /*pub fn push(&mut self, component: Box<dyn Component>) {
+        self.components.push(component);
     }
 
-    pub fn remove(&mut self, type_id: &TypeId) -> Option<Box<dyn Any>> {
-        self.components.remove(type_id)
+    pub fn pop(&mut self) -> Option<Box<dyn Component>> {
+        self.components.pop()
     }
 
-    pub fn get(&self, type_id: &TypeId) -> Option<&Box<dyn Any>> {
-        self.components.get(type_id)
-    }
+    pub fn iter(&self) -> std::slice::Iter<Box<dyn Component>> {
+        self.components.iter()
+    }*/
+}
 
-    pub fn get_archetype(&self) -> Archetype {
-        Archetype::new(self.components.keys().cloned().collect())
+impl IntoIterator for ComponentBundle {
+    type Item = Box<dyn Component>;
+    type IntoIter = std::vec::IntoIter<Box<dyn Component>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.components.into_iter()
+    }
+}
+
+impl FromIterator<Box<dyn Component>> for ComponentBundle {
+    fn from_iter<I: IntoIterator<Item = Box<dyn Component>>>(iter: I) -> Self {
+        let mut components = Vec::new();
+
+        for component in iter {
+            components.push(component);
+        }
+
+        Self { components }
+    }
+}
+
+impl Deref for ComponentBundle {
+    type Target = Vec<Box<dyn Component>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.components
+    }
+}
+
+impl DerefMut for ComponentBundle {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.components
     }
 }

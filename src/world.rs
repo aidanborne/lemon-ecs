@@ -1,108 +1,23 @@
-use std::{any::TypeId, cell::RefCell, collections::HashMap};
+use std::any::TypeId;
 
 use crate::{
     component::Component,
-    query::{Archetype, Matching, Queryable, Query},
-    storage::{bundle::ComponentBundle, entities::EntityStorage},
+    query::{Query, Queryable},
+    storage::{archetypes::ArchetypeArena, bundle::ComponentBundle},
 };
 
 pub struct World {
-    archetype_storage: Vec<EntityStorage>,
-    storage_cache: RefCell<HashMap<Archetype, Vec<usize>>>,
-    match_cache: RefCell<HashMap<(Archetype, Archetype), Matching>>,
     available_ids: Vec<usize>,
     next_id: usize,
+    archetypes: ArchetypeArena,
 }
 
 impl World {
     pub fn new() -> Self {
         Self {
-            archetype_storage: vec![EntityStorage::new()],
-            storage_cache: RefCell::new(HashMap::new()),
-            match_cache: RefCell::new(HashMap::new()),
             available_ids: Vec::new(),
             next_id: 0,
-        }
-    }
-
-    fn compare_archetypes(&self, archetype: &Archetype, other: &Archetype) -> Matching {
-        let mut cache = self.match_cache.borrow_mut();
-        let key = (archetype.clone(), other.clone());
-
-        match cache.get(&key) {
-            Some(matching) => matching.clone(),
-            None => {
-                let matching = archetype.matches(other);
-                cache.insert(key, matching.clone());
-                matching
-            }
-        }
-    }
-
-    fn get_archetype_idx_all(&self, archetype: &Archetype) -> Vec<usize> {
-        let mut cache = self.storage_cache.borrow_mut();
-
-        match cache.get(archetype) {
-            Some(indices) => indices.clone(),
-            None => {
-                let indices: Vec<_> = self
-                    .archetype_storage
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, storage)| {
-                        !self
-                            .compare_archetypes(archetype, &storage.get_archetype())
-                            .is_none()
-                    })
-                    .map(|(idx, _)| idx)
-                    .collect();
-
-                cache.insert(archetype.clone(), indices.clone());
-                indices
-            }
-        }
-    }
-
-    /// Returns the index of the storage that matches the archetype exactly.
-    /// Used to avoid having two mutable references to the same storage.
-    fn get_archetype_idx_exact(&self, archetype: &Archetype) -> Option<usize> {
-        self.get_archetype_idx_all(archetype)
-            .iter()
-            .copied()
-            .find(|idx| {
-                self.compare_archetypes(archetype, &self.archetype_storage[*idx].get_archetype())
-                    .is_exact()
-            })
-    }
-
-    /// Returns the index of the storage that contains the entity.
-    /// Prefer using get_entity_storage instead.
-    fn get_entity_storage_idx(&self, entity: usize) -> Option<usize> {
-        self.archetype_storage
-            .iter()
-            .position(|storage| storage.contains(entity))
-    }
-
-    fn get_entity_storage(&self, entity: usize) -> Option<&EntityStorage> {
-        self.get_entity_storage_idx(entity)
-            .map(|idx| &self.archetype_storage[idx])
-    }
-
-    fn get_entity_storage_mut(&mut self, entity: usize) -> Option<&mut EntityStorage> {
-        self.get_entity_storage_idx(entity)
-            .map(move |idx| &mut self.archetype_storage[idx])
-    }
-
-    fn push_storage(&mut self, storage: EntityStorage) {
-        let idx = self.archetype_storage.len();
-        self.archetype_storage.push(storage);
-
-        let storage_query = self.archetype_storage[idx].get_archetype();
-
-        for (archetype, indices) in self.storage_cache.borrow_mut().iter_mut() {
-            if !self.compare_archetypes(archetype, &storage_query).is_none() {
-                indices.push(idx);
-            }
+            archetypes: ArchetypeArena::new(),
         }
     }
 
@@ -116,78 +31,75 @@ impl World {
             }
         };
 
-        self.archetype_storage[0]
-            .insert(id, ComponentBundle::new())
-            .unwrap();
+        let bundle = ComponentBundle::new();
+
+        let idx = self.archetypes.get_bundle_archetype(&bundle);
+
+        self.archetypes[idx].insert(id, bundle);
         id
     }
 
-    pub fn despawn(&mut self, id: usize) {
-        if let Some(archetype) = self.get_entity_storage_mut(id) {
-            archetype.remove(id).unwrap();
+    pub fn despawn(&mut self, id: usize) -> Option<ComponentBundle> {
+        if let Some(idx) = self.archetypes.get_entity_archetype(id) {
+            let bundle = self.archetypes[idx].remove(id);
             self.available_ids.push(id);
+            bundle
+        } else {
+            None
         }
     }
 
     pub fn has_component<T: 'static + Component>(&self, id: usize) -> bool {
-        self.get_entity_storage(id)
-            .map(|archetype| archetype.contains(id) && archetype.has_component(TypeId::of::<T>()))
+        self.archetypes
+            .get_entity_archetype(id)
+            .map(|idx| {
+                self.archetypes[idx].contains(id)
+                    && self.archetypes[idx].has_component(TypeId::of::<T>())
+            })
             .unwrap_or(false)
     }
 
     pub fn add_component<T: 'static + Component>(&mut self, id: usize, component: T) {
-        if let Some(curr_idx) = self.get_entity_storage_idx(id) {
-            if self.archetype_storage[curr_idx].has_component(TypeId::of::<T>()) {
-                self.archetype_storage[curr_idx]
-                    .replace_component(id, component)
-                    .unwrap();
+        if let Some(curr_idx) = self.archetypes.get_entity_archetype(id) {
+            if self.archetypes[curr_idx].has_component(TypeId::of::<T>()) {
+                self.archetypes[curr_idx].replace(id, component);
             } else {
-                let mut bundle = self.archetype_storage[curr_idx].remove(id).unwrap();
-                bundle.insert(Box::new(component));
+                let mut bundle = self.archetypes[curr_idx].remove(id).unwrap();
+                bundle.push(Box::new(component));
 
-                match self.get_archetype_idx_exact(&bundle.get_archetype()) {
-                    Some(idx) => {
-                        self.archetype_storage[idx].insert(id, bundle).unwrap();
-                    }
-                    None => {
-                        let mut archetype = self.archetype_storage[curr_idx].as_empty_with::<T>();
-                        archetype.insert(id, bundle).unwrap();
-                        self.push_storage(archetype);
-                    }
-                }
+                let new_idx = self.archetypes.get_bundle_archetype(&bundle);
+                self.archetypes[new_idx].insert(id, bundle);
             }
         }
     }
 
-    pub fn remove_component<T: 'static + Component>(&mut self, id: usize) {
-        if let Some(curr_idx) = self.get_entity_storage_idx(id) {
-            if self.archetype_storage[curr_idx].has_component(TypeId::of::<T>()) {
-                let mut bundle = self.archetype_storage[curr_idx].remove(id).unwrap();
-                bundle.remove(&TypeId::of::<T>());
+    pub fn remove_component<T: 'static + Component>(&mut self, id: usize) -> Option<T> {
+        if let Some(idx) = self.archetypes.get_entity_archetype(id) {
+            if self.archetypes[idx].has_component(TypeId::of::<T>()) {
+                let mut bundle = self.archetypes[idx].remove(id).unwrap();
 
-                match self.get_archetype_idx_exact(&bundle.get_archetype()) {
-                    Some(idx) => {
-                        self.archetype_storage[idx].insert(id, bundle).unwrap();
-                    }
-                    None => {
-                        let mut archetype =
-                            self.archetype_storage[curr_idx].as_empty_without::<T>();
-                        archetype.insert(id, bundle).unwrap();
-                        self.push_storage(archetype);
-                    }
-                }
+                let comp_idx = bundle
+                    .iter()
+                    .position(|component| component.component_id() == TypeId::of::<T>())
+                    .unwrap();
+
+                let component = bundle.swap_remove(comp_idx);
+                self.archetypes[idx].insert(id, bundle);
+
+                return component.downcast::<T>().ok().map(|component| *component);
             }
         }
+
+        None
     }
 
     pub fn get_component<T: 'static + Component>(&self, id: usize) -> Option<&T> {
-        self.get_entity_storage(id)
-            .and_then(|archetype| archetype.get_component::<T>(id).ok())
+        self.archetypes
+            .get_entity_archetype(id)
+            .and_then(|idx| self.archetypes[idx].get_component::<T>(id))
     }
 
-    pub fn query<'a, T: 'static + Queryable<'a>>(&'a self) -> Query<'a, T> {
-        let archetype = T::get_archetype();
-        let indices = self.get_archetype_idx_all(&archetype);
-        Query::new(&self.archetype_storage, indices)
+    pub fn query<'a, T: Queryable<'a>>(&'a mut self) -> Query<T::Fetch, T::Filter> {
+        Query::new(self.archetypes.query_archetypes::<T>())
     }
 }

@@ -1,42 +1,46 @@
 use std::{iter::Peekable, marker::PhantomData};
 
-use crate::storage::{entities::EntityStorage, sparse_set};
+use crate::storage::{
+    archetypes,
+    entities::{self, EntityStorage},
+};
 
-mod archetype;
-mod queryable;
+use self::{fetch::QueryFetch, filter::QueryFilter, pattern::QueryPattern};
 
-pub use queryable::*;
-pub use archetype::*;
+pub mod archetype;
+pub mod fetch;
+pub mod filter;
+pub mod pattern;
 
-pub struct Query<'a, T: Queryable<'a>> {
-    archetypes: &'a [EntityStorage],
-    indices: Peekable<std::vec::IntoIter<usize>>,
-    entities: Option<sparse_set::Keys<'a, usize>>,
-    _marker: PhantomData<T>,
+pub struct Query<'a, Fetch: QueryFetch<'a> + 'a, Filter: QueryFilter + 'a = ()> {
+    archetypes: Peekable<archetypes::Iter<'a>>,
+    entities: Option<entities::Iter<'a>>,
+    _fetch: PhantomData<Fetch>,
+    _filter: PhantomData<Filter>,
 }
 
-impl<'a, T: Queryable<'a>> Query<'a, T> {
-    pub fn new(archetypes: &'a Vec<EntityStorage>, indices: Vec<usize>) -> Self {
+impl<'a, Fetch: QueryFetch<'a>, Filter: QueryFilter> Query<'a, Fetch, Filter> {
+    pub fn new(archetypes: archetypes::Iter<'a>) -> Self {
         Self {
-            archetypes,
-            indices: indices.into_iter().peekable(),
+            archetypes: archetypes.peekable(),
             entities: None,
-            _marker: PhantomData,
+            _fetch: PhantomData,
+            _filter: PhantomData,
         }
     }
 
     fn peek_archetype(&mut self) -> Option<&'a EntityStorage> {
-        self.indices.peek().map(|idx| &self.archetypes[*idx])
+        self.archetypes.peek().copied()
     }
 
-    fn next_entity(&mut self) -> Option<usize> {
+    fn next_entity(&mut self) -> Option<entities::Entity> {
         loop {
             if let Some(entities) = &mut self.entities {
-                if let Some(id) = entities.next() {
-                    return Some(id);
+                if let Some(entry) = entities.next() {
+                    return Some(entry);
                 }
 
-                self.indices.next();
+                self.archetypes.next();
             }
 
             if let Some(archetype) = self.peek_archetype() {
@@ -48,11 +52,32 @@ impl<'a, T: Queryable<'a>> Query<'a, T> {
     }
 }
 
-impl<'a, T: Queryable<'a>> Iterator for Query<'a, T> {
-    type Item = T::Result;
+impl<'a, Fetch: QueryFetch<'a>, Filter: QueryFilter> Iterator for Query<'a, Fetch, Filter> {
+    type Item = Fetch::Result;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.next_entity()
-            .map(|id| T::map_entity(self.peek_archetype().unwrap(), id))
+            .map(|entity| Fetch::get_result(entity, self.peek_archetype().unwrap()))
     }
+}
+
+pub trait Queryable<'a> {
+    type Fetch: QueryFetch<'a> + 'static;
+    type Filter: QueryFilter + 'static;
+
+    fn get_pattern() -> QueryPattern {
+        QueryPattern::new(Self::Fetch::get_type_ids(), Self::Filter::get_filters())
+    }
+}
+
+impl<'a, T: QueryFetch<'a> + 'static> Queryable<'a> for T {
+    type Fetch = Self;
+    type Filter = ();
+}
+
+impl<'a, Fetch: QueryFetch<'a> + 'static, Filter: QueryFilter + 'static> Queryable<'a>
+    for Query<'a, Fetch, Filter>
+{
+    type Fetch = Fetch;
+    type Filter = Filter;
 }
