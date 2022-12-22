@@ -28,6 +28,8 @@ impl Engine {
         for system in self.systems.iter() {
             system.update(&self.world);
         }
+
+        self.world.process_updates();
     }
 }
 

@@ -6,6 +6,7 @@ use crate::world::World;
 
 use self::params::SystemParameter;
 
+pub mod buffer;
 pub mod params;
 
 pub trait System {
@@ -50,16 +51,16 @@ where
     }
 }
 
-macro_rules! impl_callable {
+macro_rules! impl_system_fn {
     ($($param:ident),*) => {
         impl<$($param: SystemParameter,)* F: Fn($($param),*)> SystemFn<($($param,)*)> for F
-            where F: for<'a> Fn($($param::Item<'a>),*)
+            where F: Fn($(<$param as SystemParameter>::Result<'_>),*)
         {
             fn call(&self, _world: &World) {
-                self($($param::get_value(_world)),*);
+                self($($param::resolve(_world)),*);
             }
         }
     };
 }
 
-all_tuples!(impl_callable, 0..16);
+all_tuples!(impl_system_fn, 0..16);

@@ -39,11 +39,11 @@ impl QueryFetch for usize {
 
 macro_rules! impl_query_fetch {
     ($($t:ident),*) => {
-        impl<$($t: 'static + Component + QueryFetch),*> QueryFetch for ($($t,)*) {
+        impl<$($t: 'static + QueryFetch),*> QueryFetch for ($($t,)*) {
             type Result<'a> = ($($t::Result<'a>,)*);
 
             fn get_type_ids() -> Vec<TypeId> {
-                vec![$(TypeId::of::<$t>()),*]
+                vec![$($t::get_type_ids()),*].concat()
             }
 
             fn get_result<'a>(entity: Entity, storage: &'a EntityStorage) -> Self::Result<'a> {

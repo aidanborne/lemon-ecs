@@ -3,6 +3,8 @@ use lemon_ecs_macros::Component;
 use crate::{
     engine::Engine,
     query::{filter::Without, Query},
+    storage::bundle::ComponentBundle,
+    system::buffer::SystemBuffer,
     world::World,
 };
 
@@ -18,7 +20,7 @@ struct Velocity(u32, u32);
 #[test]
 pub fn world_get_component() {
     let mut world = World::new();
-    let entity = world.spawn();
+    let entity = world.spawn(ComponentBundle::new());
 
     world.add_component::<Position>(entity, Position(1, 2));
 
@@ -37,7 +39,7 @@ pub fn world_get_component() {
 pub fn world_query_basic() {
     let mut world = World::new();
 
-    let entity = world.spawn();
+    let entity = world.spawn(ComponentBundle::new());
     world.add_component::<Position>(entity, Position(1, 2));
 
     let mut query = world.query::<Position>();
@@ -54,7 +56,7 @@ pub fn world_query_basic() {
 pub fn world_query_filters() {
     let mut world = World::new();
 
-    let entity = world.spawn();
+    let entity = world.spawn(ComponentBundle::new());
     world.add_component::<Position>(entity, Position(1, 2));
     world.add_component::<Velocity>(entity, Velocity(3, 4));
 
@@ -72,10 +74,10 @@ pub fn world_query_filters() {
 pub fn world_multiple_entities() {
     let mut world = World::new();
 
-    let entity1 = world.spawn();
+    let entity1 = world.spawn(ComponentBundle::new());
     world.add_component::<Position>(entity1, Position(1, 2));
 
-    let entity2 = world.spawn();
+    let entity2 = world.spawn(ComponentBundle::new());
     world.add_component::<Position>(entity2, Position(3, 4));
 
     let mut query = world.query::<Position>();
@@ -89,19 +91,16 @@ pub fn world_multiple_entities() {
     assert!(query.next().is_none(), "Query should be empty");
 }
 
-static mut POSITION: Option<Position> = None;
+fn print_system(buffer: SystemBuffer, query: Query<(usize, Position, Velocity)>) {
+    for (id, position, velocity) in query {
+        let mut bundle = ComponentBundle::new();
 
-fn print_system(query: Query<(Position, Velocity)>) {
-    for (position, velocity) in query {
-        unsafe {
-            if POSITION.is_none() {
-                POSITION = Some(*position);
-            }
+        bundle.push(Box::new(Position(
+            position.0 + velocity.0,
+            position.1 + velocity.1,
+        )));
 
-            let position = POSITION.unwrap();
-
-            POSITION = Some(Position(position.0 + velocity.0, position.1 + velocity.1));
-        }
+        buffer.insert(id, bundle);
     }
 }
 
@@ -110,7 +109,7 @@ pub fn engine_run() {
     let mut engine = Engine::new();
     engine.add_system(print_system);
 
-    let entity = engine.spawn();
+    let entity = engine.spawn(ComponentBundle::new());
 
     engine.add_component::<Position>(entity, Position(1, 2));
 
@@ -120,7 +119,11 @@ pub fn engine_run() {
         engine.update();
     }
 
-    let position = unsafe { POSITION.unwrap() };
+    let position = engine.get_component::<Position>(entity);
 
-    assert_eq!(position, Position(31, 42), "Position should be (31, 42)");
+    assert_eq!(
+        position,
+        Some(&Position(31, 42)),
+        "Position should be (31, 42)"
+    );
 }

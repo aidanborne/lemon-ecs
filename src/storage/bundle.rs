@@ -2,6 +2,8 @@ use std::ops::{Deref, DerefMut};
 
 use crate::component::Component;
 
+#[repr(transparent)]
+#[derive(Default)]
 pub struct ComponentBundle {
     components: Vec<Box<dyn Component>>,
 }
@@ -12,18 +14,6 @@ impl ComponentBundle {
             components: Vec::new(),
         }
     }
-
-    /*pub fn push(&mut self, component: Box<dyn Component>) {
-        self.components.push(component);
-    }
-
-    pub fn pop(&mut self) -> Option<Box<dyn Component>> {
-        self.components.pop()
-    }
-
-    pub fn iter(&self) -> std::slice::Iter<Box<dyn Component>> {
-        self.components.iter()
-    }*/
 }
 
 impl IntoIterator for ComponentBundle {

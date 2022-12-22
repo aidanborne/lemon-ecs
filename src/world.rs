@@ -1,15 +1,27 @@
-use std::any::TypeId;
+use std::{any::TypeId, cell::RefCell};
 
 use crate::{
     component::Component,
     query::{Query, Queryable},
-    storage::{archetypes::ArchetypeArena, bundle::ComponentBundle},
+    storage::{
+        archetypes::{self, ArchetypeArena, QueryResult},
+        bundle::ComponentBundle,
+    },
 };
+
+pub enum WorldUpdate {
+    SpawnEntity(ComponentBundle),
+    DespawnEntity(usize),
+    InsertComponents(usize, ComponentBundle),
+    RemoveComponents(usize, Vec<TypeId>),
+    CacheQuery(TypeId, QueryResult),
+}
 
 pub struct World {
     available_ids: Vec<usize>,
     next_id: usize,
     archetypes: ArchetypeArena,
+    updates: RefCell<Vec<WorldUpdate>>,
 }
 
 impl World {
@@ -18,10 +30,11 @@ impl World {
             available_ids: Vec::new(),
             next_id: 0,
             archetypes: Default::default(),
+            updates: Default::default(),
         }
     }
 
-    pub fn spawn(&mut self) -> usize {
+    pub fn spawn(&mut self, bundle: ComponentBundle) -> usize {
         let id = match self.available_ids.pop() {
             Some(id) => id,
             None => {
@@ -30,8 +43,6 @@ impl World {
                 id
             }
         };
-
-        let bundle = ComponentBundle::new();
 
         let idx = self.archetypes.get_bundle_archetype(&bundle);
 
@@ -99,7 +110,68 @@ impl World {
             .and_then(|idx| self.archetypes[idx].get_component::<T>(id))
     }
 
+    pub fn update_entity<F: FnOnce(&mut ComponentBundle)>(&mut self, id: usize, func: F) {
+        if let Some(idx) = self.archetypes.get_entity_archetype(id) {
+            let mut bundle = self.archetypes[idx].remove(id).unwrap();
+            func(&mut bundle);
+
+            let new_idx = self.archetypes.get_bundle_archetype(&bundle);
+            self.archetypes[new_idx].insert(id, bundle);
+        }
+    }
+
     pub fn query<'a, T: Queryable<'a>>(&'a self) -> Query<'a, T::Fetch, T::Filter> {
-        Query::new(self.archetypes.query_archetypes::<T>())
+        let type_id = TypeId::of::<(T::Fetch, T::Filter)>();
+
+        match self.archetypes.query_cached(type_id) {
+            Some(result) => Query::new(archetypes::Iter::new(
+                &self.archetypes,
+                result.archetypes.clone(),
+            )),
+            None => {
+                let result = self.archetypes.query_uncached(T::get_pattern());
+                let ids = result.archetypes.clone();
+
+                self.updates
+                    .borrow_mut()
+                    .push(WorldUpdate::CacheQuery(type_id, result));
+
+                Query::new(archetypes::Iter::new(&self.archetypes, ids))
+            }
+        }
+    }
+
+    pub fn process_updates(&mut self) {
+        for update in self.updates.replace(Vec::new()).into_iter() {
+            match update {
+                WorldUpdate::SpawnEntity(bundle) => {
+                    self.spawn(bundle);
+                }
+                WorldUpdate::DespawnEntity(id) => {
+                    self.despawn(id);
+                }
+                WorldUpdate::InsertComponents(id, bundle) => {
+                    if let Some(idx) = self.archetypes.get_entity_archetype(id) {
+                        let mut curr_bundle = self.archetypes[idx].remove(id).unwrap();
+                        curr_bundle.extend(bundle);
+                        self.archetypes[idx].insert(id, curr_bundle);
+                    }
+                }
+                WorldUpdate::RemoveComponents(id, types) => {
+                    if let Some(idx) = self.archetypes.get_entity_archetype(id) {
+                        let mut curr_bundle = self.archetypes[idx].remove(id).unwrap();
+                        curr_bundle.retain(|component| !types.contains(&component.component_id()));
+                        self.archetypes[idx].insert(id, curr_bundle);
+                    }
+                }
+                WorldUpdate::CacheQuery(type_id, result) => {
+                    self.archetypes.cache_query(type_id, result);
+                }
+            };
+        }
+    }
+
+    pub fn push_update(&self, update: WorldUpdate) {
+        self.updates.borrow_mut().push(update);
     }
 }

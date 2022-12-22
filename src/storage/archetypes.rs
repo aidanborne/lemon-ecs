@@ -1,11 +1,10 @@
 use std::{
     any::TypeId,
-    cell::RefCell,
     collections::HashMap,
     ops::{Index, IndexMut},
 };
 
-use crate::query::{archetype::Archetype, pattern::QueryPattern, Queryable};
+use crate::query::{archetype::Archetype, pattern::QueryPattern};
 
 use super::{bundle::ComponentBundle, entities::EntityStorage};
 
@@ -13,16 +12,16 @@ use super::{bundle::ComponentBundle, entities::EntityStorage};
 #[repr(transparent)]
 pub struct ArchetypeId(usize);
 
-struct QueryCache {
-    pattern: QueryPattern,
-    archetypes: Vec<usize>,
+pub struct QueryResult {
+    pub(crate) pattern: QueryPattern,
+    pub(crate) archetypes: Vec<ArchetypeId>,
 }
 
 #[derive(Default)]
 pub struct ArchetypeArena {
     archetypes: Vec<EntityStorage>,
     bundle_cache: HashMap<Archetype, usize>,
-    query_cache: RefCell<HashMap<TypeId, QueryCache>>,
+    query_cache: HashMap<TypeId, QueryResult>,
 }
 
 impl ArchetypeArena {
@@ -70,9 +69,9 @@ impl ArchetypeArena {
 
                 self.archetypes.push(storage);
 
-                for (_type_id, cache) in self.query_cache.borrow_mut().iter_mut() {
+                for (_type_id, cache) in self.query_cache.iter_mut() {
                     if cache.pattern.filter(&archetype) {
-                        cache.archetypes.push(idx);
+                        cache.archetypes.push(ArchetypeId(idx));
                     }
                 }
 
@@ -82,42 +81,35 @@ impl ArchetypeArena {
         }
     }
 
-    pub fn query_archetypes<'a, T: Queryable<'a>>(&'a self) -> Iter<'a> {
-        let mut cache = self.query_cache.borrow_mut();
+    /// Returns the archetypes that matche the given pattern.
+    /// Does not cache the result. Caching should be done manually.
+    pub fn query_uncached(&self, pattern: QueryPattern) -> QueryResult {
+        let archetypes = self
+            .archetypes
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, storage)| {
+                if pattern.filter(&storage.get_archetype()) {
+                    Some(ArchetypeId(idx))
+                } else {
+                    None
+                }
+            })
+            .collect();
 
-        let type_id = TypeId::of::<(T::Fetch, T::Filter)>();
+        QueryResult {
+            pattern,
+            archetypes,
+        }
+    }
 
-        let indices = match cache.get(&type_id) {
-            Some(pattern) => pattern.archetypes.clone(),
-            None => {
-                let pattern = T::get_pattern();
+    /// Returns the archetypes that match the given type.
+    pub fn query_cached(&self, type_id: TypeId) -> Option<&QueryResult> {
+        self.query_cache.get(&type_id)
+    }
 
-                let indices: Vec<_> = self
-                    .archetypes
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(idx, storage)| {
-                        if pattern.filter(&storage.get_archetype()) {
-                            Some(idx)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-
-                cache.insert(
-                    type_id,
-                    QueryCache {
-                        pattern,
-                        archetypes: indices.clone(),
-                    },
-                );
-
-                indices
-            }
-        };
-
-        Iter::new(&self.archetypes, indices)
+    pub fn cache_query(&mut self, type_id: TypeId, result: QueryResult) {
+        self.query_cache.insert(type_id, result);
     }
 }
 
@@ -136,15 +128,15 @@ impl IndexMut<ArchetypeId> for ArchetypeArena {
 }
 
 pub struct Iter<'a> {
-    archetypes: &'a [EntityStorage],
-    indices: std::vec::IntoIter<usize>,
+    archetypes: &'a ArchetypeArena,
+    ids: std::vec::IntoIter<ArchetypeId>,
 }
 
 impl<'a> Iter<'a> {
-    pub fn new(archetypes: &'a [EntityStorage], indices: Vec<usize>) -> Self {
+    pub fn new(archetypes: &'a ArchetypeArena, ids: Vec<ArchetypeId>) -> Self {
         Self {
             archetypes,
-            indices: indices.into_iter(),
+            ids: ids.into_iter(),
         }
     }
 }
@@ -153,6 +145,6 @@ impl<'a> Iterator for Iter<'a> {
     type Item = &'a EntityStorage;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.indices.next().map(|idx| &self.archetypes[idx])
+        self.ids.next().map(|idx| &self.archetypes[idx])
     }
 }
