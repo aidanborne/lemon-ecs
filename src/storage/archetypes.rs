@@ -4,9 +4,12 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-use crate::query::{archetype::Archetype, pattern::QueryPattern};
+use crate::{
+    component::ComponentBundle,
+    query::{archetype::Archetype, pattern::QueryPattern},
+};
 
-use super::{bundle::ComponentBundle, entities::EntityStorage};
+use super::entities::EntityStorage;
 
 #[derive(Clone, Copy)]
 #[repr(transparent)]

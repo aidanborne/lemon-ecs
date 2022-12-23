@@ -1,12 +1,9 @@
 use std::{any::TypeId, cell::RefCell};
 
 use crate::{
-    component::Component,
+    component::{Bundleable, Component, ComponentBundle},
     query::{Query, Queryable},
-    storage::{
-        archetypes::{self, ArchetypeArena, QueryResult},
-        bundle::ComponentBundle,
-    },
+    storage::archetypes::{self, ArchetypeArena, QueryResult},
 };
 
 pub enum WorldUpdate {
@@ -34,7 +31,7 @@ impl World {
         }
     }
 
-    pub fn spawn(&mut self, bundle: ComponentBundle) -> usize {
+    pub fn spawn(&mut self, bundle: impl Bundleable) -> usize {
         let id = match self.available_ids.pop() {
             Some(id) => id,
             None => {
@@ -44,10 +41,16 @@ impl World {
             }
         };
 
+        let bundle = bundle.bundle();
+
         let idx = self.archetypes.get_bundle_archetype(&bundle);
 
         self.archetypes[idx].insert(id, bundle);
         id
+    }
+
+    pub fn spawn_empty(&mut self) -> usize {
+        self.spawn(ComponentBundle::new())
     }
 
     pub fn despawn(&mut self, id: usize) -> Option<ComponentBundle> {

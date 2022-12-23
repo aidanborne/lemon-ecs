@@ -1,8 +1,11 @@
 use std::{any::TypeId, collections::HashMap};
 
-use crate::{component::Component, query::archetype::Archetype};
+use crate::{
+    component::{Component, ComponentBundle},
+    query::archetype::Archetype,
+};
 
-use super::{bundle::ComponentBundle, components::ComponentVec, sparse_set::SparseSet};
+use super::{components::ComponentVec, sparse_set::SparseSet};
 
 pub struct EntityStorage {
     entities: SparseSet<usize>,

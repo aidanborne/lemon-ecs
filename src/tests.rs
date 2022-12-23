@@ -1,9 +1,8 @@
-use lemon_ecs_macros::Component;
+use lemon_ecs_macros::{Bundleable, Component};
 
 use crate::{
     engine::Engine,
     query::{filter::Without, Query},
-    storage::bundle::ComponentBundle,
     system::buffer::SystemBuffer,
     world::World,
 };
@@ -17,10 +16,13 @@ struct Position(u32, u32);
 #[derive(Component, PartialEq, Eq, Debug, Clone, Copy)]
 struct Velocity(u32, u32);
 
+#[derive(Bundleable)]
+struct Movable(Position, Velocity);
+
 #[test]
 pub fn world_get_component() {
     let mut world = World::new();
-    let entity = world.spawn(ComponentBundle::new());
+    let entity = world.spawn_empty();
 
     world.add_component::<Position>(entity, Position(1, 2));
 
@@ -39,7 +41,7 @@ pub fn world_get_component() {
 pub fn world_query_basic() {
     let mut world = World::new();
 
-    let entity = world.spawn(ComponentBundle::new());
+    let entity = world.spawn_empty();
     world.add_component::<Position>(entity, Position(1, 2));
 
     let mut query = world.query::<Position>();
@@ -56,7 +58,7 @@ pub fn world_query_basic() {
 pub fn world_query_filters() {
     let mut world = World::new();
 
-    let entity = world.spawn(ComponentBundle::new());
+    let entity = world.spawn_empty();
     world.add_component::<Position>(entity, Position(1, 2));
     world.add_component::<Velocity>(entity, Velocity(3, 4));
 
@@ -74,10 +76,10 @@ pub fn world_query_filters() {
 pub fn world_multiple_entities() {
     let mut world = World::new();
 
-    let entity1 = world.spawn(ComponentBundle::new());
+    let entity1 = world.spawn_empty();
     world.add_component::<Position>(entity1, Position(1, 2));
 
-    let entity2 = world.spawn(ComponentBundle::new());
+    let entity2 = world.spawn_empty();
     world.add_component::<Position>(entity2, Position(3, 4));
 
     let mut query = world.query::<Position>();
@@ -93,14 +95,10 @@ pub fn world_multiple_entities() {
 
 fn print_system(buffer: SystemBuffer, query: Query<(usize, Position, Velocity)>) {
     for (id, position, velocity) in query {
-        let mut bundle = ComponentBundle::new();
-
-        bundle.push(Box::new(Position(
-            position.0 + velocity.0,
-            position.1 + velocity.1,
-        )));
-
-        buffer.insert(id, bundle);
+        buffer.insert(
+            id,
+            Position(position.0 + velocity.0, position.1 + velocity.1),
+        );
     }
 }
 
@@ -109,7 +107,7 @@ pub fn engine_run() {
     let mut engine = Engine::new();
     engine.add_system(print_system);
 
-    let entity = engine.spawn(ComponentBundle::new());
+    let entity = engine.spawn_empty();
 
     engine.add_component::<Position>(entity, Position(1, 2));
 

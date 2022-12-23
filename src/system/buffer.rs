@@ -1,7 +1,7 @@
 use std::any::TypeId;
 
 use crate::{
-    storage::bundle::ComponentBundle,
+    component::Bundleable,
     world::{World, WorldUpdate},
 };
 
@@ -16,17 +16,18 @@ impl<'a> SystemBuffer<'a> {
         Self { world }
     }
 
-    pub fn spawn(&self, bundle: ComponentBundle) {
-        self.world.push_update(WorldUpdate::SpawnEntity(bundle));
+    pub fn spawn(&self, bundle: impl Bundleable) {
+        self.world
+            .push_update(WorldUpdate::SpawnEntity(bundle.bundle()));
     }
 
     pub fn despawn(&self, id: usize) {
         self.world.push_update(WorldUpdate::DespawnEntity(id));
     }
 
-    pub fn insert(&self, id: usize, bundle: ComponentBundle) {
+    pub fn insert(&self, id: usize, bundle: impl Bundleable) {
         self.world
-            .push_update(WorldUpdate::InsertComponents(id, bundle));
+            .push_update(WorldUpdate::InsertComponents(id, bundle.bundle()));
     }
 
     pub fn remove(&self, id: usize, types: Vec<TypeId>) {
