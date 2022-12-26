@@ -8,6 +8,7 @@ use self::params::SystemParameter;
 
 pub mod buffer;
 pub mod params;
+pub mod resource;
 
 pub trait System {
     fn update<'a>(&self, world: &'a World);
@@ -20,7 +21,7 @@ pub trait IntoSystem<T> {
 }
 
 /// Needed to implement `IntoSystem` for `Fn` items.
-pub trait SystemFn<Args> {
+trait SystemFn<Args> {
     fn call<'a>(&self, world: &'a World);
 }
 
@@ -56,6 +57,7 @@ macro_rules! impl_system_fn {
         impl<$($param: SystemParameter,)* F: Fn($($param),*)> SystemFn<($($param,)*)> for F
             where F: Fn($(<$param as SystemParameter>::Result<'_>),*)
         {
+            #[inline]
             fn call(&self, _world: &World) {
                 self($($param::resolve(_world)),*);
             }

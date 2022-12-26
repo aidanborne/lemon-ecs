@@ -33,7 +33,7 @@ impl EntityStorage {
         }
     }
 
-    pub fn replace<T: 'static + Component>(&mut self, id: usize, component: T) {
+    pub fn replace_component<T: 'static + Component>(&mut self, id: usize, component: T) {
         if let Some(idx) = self.entities.dense_idx(id) {
             if let Some(storage) = self.components.get_mut(&TypeId::of::<T>()) {
                 storage.insert(idx, Box::new(component));

@@ -3,7 +3,7 @@ use lemon_ecs_macros::{Bundleable, Component};
 use crate::{
     engine::Engine,
     query::{filter::Without, Query},
-    system::buffer::SystemBuffer,
+    system::{buffer::SystemBuffer, resource::ResourceMut},
     world::World,
 };
 
@@ -124,4 +124,38 @@ pub fn engine_run() {
         Some(&Position(31, 42)),
         "Position should be (31, 42)"
     );
+}
+
+struct Counter {
+    count: u32,
+}
+
+impl Counter {
+    fn new() -> Self {
+        Self { count: 0 }
+    }
+
+    fn increment(&mut self) {
+        self.count += 1;
+    }
+}
+
+fn counter_system(mut counter: ResourceMut<Counter>) {
+    counter.increment();
+}
+
+#[test]
+pub fn engine_resource() {
+    let mut engine = Engine::new();
+    engine.add_system(counter_system);
+
+    engine.insert_resource(Counter::new());
+
+    for _ in 0..15 {
+        engine.update();
+    }
+
+    let counter = engine.get_resource::<Counter>();
+
+    assert_eq!(counter.unwrap().count, 15, "Counter should be 15");
 }

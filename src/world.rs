@@ -1,9 +1,14 @@
-use std::{any::TypeId, cell::RefCell};
+use std::{
+    any::{Any, TypeId},
+    cell::{Ref, RefCell, RefMut},
+    collections::HashMap,
+};
 
 use crate::{
     component::{Bundleable, Component, ComponentBundle},
     query::{Query, Queryable},
     storage::archetypes::{self, ArchetypeArena, QueryResult},
+    system::resource::{Resource, ResourceMut},
 };
 
 pub enum WorldUpdate {
@@ -12,6 +17,8 @@ pub enum WorldUpdate {
     InsertComponents(usize, ComponentBundle),
     RemoveComponents(usize, Vec<TypeId>),
     CacheQuery(TypeId, QueryResult),
+    InsertResource(Box<RefCell<dyn Any>>),
+    RemoveResource(TypeId),
 }
 
 pub struct World {
@@ -19,6 +26,7 @@ pub struct World {
     next_id: usize,
     archetypes: ArchetypeArena,
     updates: RefCell<Vec<WorldUpdate>>,
+    resources: HashMap<TypeId, Box<RefCell<dyn Any>>>,
 }
 
 impl World {
@@ -28,6 +36,7 @@ impl World {
             next_id: 0,
             archetypes: Default::default(),
             updates: Default::default(),
+            resources: Default::default(),
         }
     }
 
@@ -76,7 +85,7 @@ impl World {
     pub fn add_component<T: 'static + Component>(&mut self, id: usize, component: T) {
         if let Some(curr_idx) = self.archetypes.get_entity_archetype(id) {
             if self.archetypes[curr_idx].has_component(TypeId::of::<T>()) {
-                self.archetypes[curr_idx].replace(id, component);
+                self.archetypes[curr_idx].replace_component(id, component);
             } else {
                 let mut bundle = self.archetypes[curr_idx].remove(id).unwrap();
                 bundle.push(Box::new(component));
@@ -144,6 +153,27 @@ impl World {
         }
     }
 
+    pub fn get_resource<T: 'static>(&self) -> Option<Resource<T>> {
+        let cell = &**self.resources.get(&TypeId::of::<T>())?;
+        let ref_value = Ref::map(cell.borrow(), |r| r.downcast_ref::<T>().unwrap());
+        Some(Resource::new(ref_value))
+    }
+
+    pub fn get_resource_mut<T: 'static>(&self) -> Option<ResourceMut<T>> {
+        let cell = &**self.resources.get(&TypeId::of::<T>())?;
+        let ref_value = RefMut::map(cell.borrow_mut(), |r| r.downcast_mut::<T>().unwrap());
+        Some(ResourceMut::new(ref_value))
+    }
+
+    pub fn insert_resource<T: 'static>(&mut self, resource: T) {
+        self.resources
+            .insert(TypeId::of::<T>(), Box::new(RefCell::new(resource)));
+    }
+
+    pub fn remove_resource<T: 'static>(&mut self) {
+        self.resources.remove(&TypeId::of::<T>());
+    }
+
     pub fn process_updates(&mut self) {
         for update in self.updates.replace(Vec::new()).into_iter() {
             match update {
@@ -169,6 +199,13 @@ impl World {
                 }
                 WorldUpdate::CacheQuery(type_id, result) => {
                     self.archetypes.cache_query(type_id, result);
+                }
+                WorldUpdate::InsertResource(resource) => {
+                    let type_id = (*resource.borrow()).type_id();
+                    self.resources.insert(type_id, resource);
+                }
+                WorldUpdate::RemoveResource(type_id) => {
+                    self.resources.remove(&type_id);
                 }
             };
         }

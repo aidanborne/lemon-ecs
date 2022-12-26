@@ -1,4 +1,4 @@
-use std::any::TypeId;
+use std::{any::TypeId, cell::RefCell};
 
 use crate::{
     component::Bundleable,
@@ -33,6 +33,18 @@ impl<'a> SystemBuffer<'a> {
     pub fn remove(&self, id: usize, types: Vec<TypeId>) {
         self.world
             .push_update(WorldUpdate::RemoveComponents(id, types));
+    }
+
+    pub fn insert_resource<T: 'static>(&self, resource: T) {
+        self.world
+            .push_update(WorldUpdate::InsertResource(Box::new(RefCell::new(
+                resource,
+            ))));
+    }
+
+    pub fn remove_resource<T: 'static>(&self) {
+        self.world
+            .push_update(WorldUpdate::RemoveResource(TypeId::of::<T>()));
     }
 }
 
