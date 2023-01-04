@@ -1,28 +1,45 @@
+use std::any::TypeId;
+
 use crate::{
-    query::{fetch::QueryFetch, filter::QueryFilter, Query},
+    component::Component,
+    query::{fetch::QueryFetch, filter::QueryFilter, Query, QueryChanged},
     world::World,
 };
 
 pub trait SystemParameter {
-    type Result<'a>;
+    type Result<'world>;
 
-    fn resolve<'a>(world: &'a World) -> Self::Result<'a>;
+    fn init(_world: &mut World) {}
+
+    fn resolve(world: &World) -> Self::Result<'_>;
 }
 
 impl<Fetch: 'static + QueryFetch, Filter: 'static + QueryFilter> SystemParameter
     for Query<'_, Fetch, Filter>
 {
-    type Result<'a> = Query<'a, Fetch, Filter>;
+    type Result<'world> = Query<'world, Fetch, Filter>;
 
-    fn resolve<'a>(world: &'a World) -> Self::Result<'a> {
+    fn resolve(world: &World) -> Self::Result<'_> {
         world.query::<Fetch, Filter>()
     }
 }
 
-/*impl SystemParameter for &'_ World {
-    type Item<'a> = &'a World;
+impl<T: 'static + Component> SystemParameter for QueryChanged<'_, T> {
+    type Result<'world> = QueryChanged<'world, T>;
 
-    fn get_value<'a>(world: &'a World) -> Self::Item<'a> {
+    fn init(world: &mut World) {
+        world.track_changes(TypeId::of::<T>());
+    }
+
+    fn resolve(world: &World) -> Self::Result<'_> {
+        world.query_changed::<T>().unwrap()
+    }
+}
+
+impl SystemParameter for &'_ World {
+    type Result<'world> = &'world World;
+
+    fn resolve(world: &World) -> Self::Result<'_> {
         world
     }
-}*/
+}

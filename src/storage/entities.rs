@@ -1,18 +1,15 @@
 use std::{any::TypeId, collections::HashMap};
 
-use crate::{
-    component::{bundle::ComponentBundle, Component},
-    query::archetype::Archetype,
-};
+use crate::component::{bundle::ComponentBundle, Component};
 
 use super::{components::ComponentVec, sparse_set::SparseSet};
 
-pub struct EntityStorage {
+pub struct EntitySparseSet {
     entities: SparseSet<usize>,
-    components: HashMap<TypeId, Box<dyn ComponentVec + 'static>>,
+    components: HashMap<TypeId, Box<dyn ComponentVec>>,
 }
 
-impl EntityStorage {
+impl EntitySparseSet {
     pub fn new() -> Self {
         Self {
             entities: SparseSet::new(),
@@ -24,7 +21,7 @@ impl EntityStorage {
         let mut components = HashMap::new();
 
         for component in bundle.iter() {
-            components.insert(component.as_any().type_id(), component.create_storage());
+            components.insert(component.as_any().type_id(), component.get_storage());
         }
 
         Self {
@@ -95,11 +92,11 @@ impl EntityStorage {
         None
     }
 
-    pub fn get_archetype(&self) -> Archetype {
+    pub fn type_ids<T: FromIterator<TypeId>>(&self) -> T {
         self.components.keys().cloned().collect()
     }
 
-    pub fn iter(&self) -> super::sparse_set::Iter<usize> {
+    pub fn entities(&self) -> super::sparse_set::Iter<usize> {
         self.entities.iter()
     }
 }

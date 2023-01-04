@@ -11,18 +11,16 @@ pub mod params;
 pub mod resource;
 
 pub trait System {
-    fn update<'a>(&self, world: &'a World);
+    fn update(&self, world: &World);
 }
 
-pub type BoxedSystem = Box<dyn System>;
-
 pub trait IntoSystem<T> {
-    fn into_system(self) -> BoxedSystem;
+    fn into_system(self) -> Box<dyn System>;
 }
 
 /// Needed to implement `IntoSystem` for `Fn` items.
 trait SystemFn<Args> {
-    fn call<'a>(&self, world: &'a World);
+    fn call(&self, world: &World);
 }
 
 struct SystemImpl<Func, Args> {
@@ -44,7 +42,7 @@ where
     F: SystemFn<Args> + 'static,
     Args: 'static,
 {
-    fn into_system(self) -> BoxedSystem {
+    fn into_system(self) -> Box<dyn System> {
         Box::new(SystemImpl {
             f: self,
             _args: PhantomData::<Args>,

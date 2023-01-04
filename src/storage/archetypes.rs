@@ -1,56 +1,62 @@
 use std::{
     any::TypeId,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     ops::{Index, IndexMut},
 };
 
 use crate::{
     component::bundle::ComponentBundle,
-    query::{archetype::Archetype, pattern::QueryPattern},
+    query::filter::{Filter, FilterKind},
 };
 
-use super::entities::EntityStorage;
+use super::entities::EntitySparseSet;
 
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct ArchetypeId(usize);
+pub struct ArchetypeIdx(usize);
 
 pub struct QueryResult {
-    pub(crate) pattern: QueryPattern,
-    pub(crate) archetypes: Vec<ArchetypeId>,
+    filter_kinds: Vec<FilterKind>,
+    indices: Vec<ArchetypeIdx>,
+}
+
+impl QueryResult {
+    pub fn indices(&self) -> Vec<ArchetypeIdx> {
+        self.indices.clone()
+    }
 }
 
 #[derive(Default)]
-pub struct ArchetypeArena {
-    archetypes: Vec<EntityStorage>,
-    bundle_cache: HashMap<Archetype, usize>,
+pub struct Archetypes {
+    archetypes: Vec<EntitySparseSet>,
+    bundle_cache: HashMap<Vec<TypeId>, usize>,
     query_cache: HashMap<TypeId, QueryResult>,
 }
 
-impl ArchetypeArena {
+impl Archetypes {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn get_entity_archetype(&self, id: usize) -> Option<ArchetypeId> {
+    pub fn get_entity_archetype(&self, id: usize) -> Option<ArchetypeIdx> {
         self.archetypes
             .iter()
             .position(move |archetype| archetype.contains(id))
-            .map(|idx| ArchetypeId(idx))
+            .map(|idx| ArchetypeIdx(idx))
     }
 
-    pub fn get_existing_archetype(&mut self, archetype: Archetype) -> Option<ArchetypeId> {
-        match self.bundle_cache.get(&archetype) {
-            Some(idx) => Some(ArchetypeId(*idx)),
+    pub fn get_existing_archetype(&mut self, type_ids: Vec<TypeId>) -> Option<ArchetypeIdx> {
+        match self.bundle_cache.get(&type_ids) {
+            Some(idx) => Some(ArchetypeIdx(*idx)),
             None => {
                 let idx = self
                     .archetypes
                     .iter()
-                    .position(|storage| storage.get_archetype() == archetype);
+                    .position(|storage| storage.type_ids::<Vec<TypeId>>() == type_ids);
 
                 if let Some(idx) = idx {
-                    self.bundle_cache.insert(archetype, idx);
-                    Some(ArchetypeId(idx))
+                    self.bundle_cache.insert(type_ids, idx);
+                    Some(ArchetypeIdx(idx))
                 } else {
                     None
                 }
@@ -58,42 +64,44 @@ impl ArchetypeArena {
         }
     }
 
-    pub fn get_bundle_archetype(&mut self, bundle: &ComponentBundle) -> ArchetypeId {
-        let archetype = bundle
+    pub fn get_bundle_archetype(&mut self, bundle: &ComponentBundle) -> ArchetypeIdx {
+        let archetype: Vec<TypeId> = bundle
             .iter()
             .map(|component| component.as_any().type_id())
             .collect();
 
+        let hash_set: HashSet<TypeId> = archetype.iter().cloned().collect();
+
         match self.bundle_cache.get(&archetype) {
-            Some(idx) => ArchetypeId(*idx),
+            Some(idx) => ArchetypeIdx(*idx),
             None => {
                 let idx = self.archetypes.len();
-                let storage = EntityStorage::from_bundle(bundle);
+                let storage = EntitySparseSet::from_bundle(bundle);
 
                 self.archetypes.push(storage);
 
                 for (_type_id, cache) in self.query_cache.iter_mut() {
-                    if cache.pattern.filter(&archetype) {
-                        cache.archetypes.push(ArchetypeId(idx));
+                    if cache.filter_kinds.filter(&hash_set) {
+                        cache.indices.push(ArchetypeIdx(idx));
                     }
                 }
 
                 self.bundle_cache.insert(archetype, idx);
-                ArchetypeId(idx)
+                ArchetypeIdx(idx)
             }
         }
     }
 
     /// Returns the archetypes that matche the given pattern.
     /// Does not cache the result. Caching should be done manually.
-    pub fn query_uncached(&self, pattern: QueryPattern) -> QueryResult {
-        let archetypes = self
+    pub fn query_uncached(&self, filter_kinds: Vec<FilterKind>) -> QueryResult {
+        let indices = self
             .archetypes
             .iter()
             .enumerate()
             .filter_map(|(idx, storage)| {
-                if pattern.filter(&storage.get_archetype()) {
-                    Some(ArchetypeId(idx))
+                if filter_kinds.filter(&storage.type_ids()) {
+                    Some(ArchetypeIdx(idx))
                 } else {
                     None
                 }
@@ -101,8 +109,8 @@ impl ArchetypeArena {
             .collect();
 
         QueryResult {
-            pattern,
-            archetypes,
+            filter_kinds,
+            indices,
         }
     }
 
@@ -116,16 +124,16 @@ impl ArchetypeArena {
     }
 }
 
-impl Index<ArchetypeId> for ArchetypeArena {
-    type Output = EntityStorage;
+impl Index<ArchetypeIdx> for Archetypes {
+    type Output = EntitySparseSet;
 
-    fn index(&self, index: ArchetypeId) -> &Self::Output {
-        &self.archetypes[index.0]
+    fn index(&self, idx: ArchetypeIdx) -> &Self::Output {
+        &self.archetypes[idx.0]
     }
 }
 
-impl IndexMut<ArchetypeId> for ArchetypeArena {
-    fn index_mut(&mut self, index: ArchetypeId) -> &mut Self::Output {
+impl IndexMut<ArchetypeIdx> for Archetypes {
+    fn index_mut(&mut self, index: ArchetypeIdx) -> &mut Self::Output {
         &mut self.archetypes[index.0]
     }
 }

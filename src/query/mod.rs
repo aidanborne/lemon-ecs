@@ -3,30 +3,31 @@ use std::{iter::Peekable, marker::PhantomData};
 use crate::{
     component::{changes::ChangeRecord, Component},
     storage::{
-        archetypes::{ArchetypeArena, ArchetypeId},
-        entities::EntityStorage,
+        archetypes::{ArchetypeIdx, Archetypes},
+        entities::EntitySparseSet,
         sparse_set,
     },
     world::World,
 };
 
-use self::{fetch::QueryFetch, filter::QueryFilter, pattern::QueryPattern};
+use self::{
+    fetch::QueryFetch,
+    filter::{FilterKind, QueryFilter},
+};
 
-pub mod archetype;
 pub mod fetch;
 pub mod filter;
-pub mod pattern;
 
 pub struct Query<'world, Fetch: QueryFetch, Filter: QueryFilter = ()> {
-    archetypes: &'world ArchetypeArena,
-    archetype_idx: Peekable<std::vec::IntoIter<ArchetypeId>>,
+    archetypes: &'world Archetypes,
+    archetype_idx: Peekable<std::vec::IntoIter<ArchetypeIdx>>,
     entities: Option<sparse_set::Iter<'world, usize>>,
     _fetch: PhantomData<Fetch>,
     _filter: PhantomData<Filter>,
 }
 
 impl<'world, Fetch: QueryFetch, Filter: QueryFilter> Query<'world, Fetch, Filter> {
-    pub fn new(archetypes: &'world ArchetypeArena, indices: Vec<ArchetypeId>) -> Self {
+    pub fn new(archetypes: &'world Archetypes, indices: Vec<ArchetypeIdx>) -> Self {
         Self {
             archetypes,
             archetype_idx: indices.into_iter().peekable(),
@@ -36,7 +37,7 @@ impl<'world, Fetch: QueryFetch, Filter: QueryFilter> Query<'world, Fetch, Filter
         }
     }
 
-    fn peek_archetype(&mut self) -> Option<&'world EntityStorage> {
+    fn peek_archetype(&mut self) -> Option<&'world EntitySparseSet> {
         self.archetype_idx.peek().map(|idx| &self.archetypes[*idx])
     }
 
@@ -51,24 +52,28 @@ impl<'world, Fetch: QueryFetch, Filter: QueryFilter> Query<'world, Fetch, Filter
             }
 
             if let Some(archetype) = self.peek_archetype() {
-                self.entities = Some(archetype.iter());
+                self.entities = Some(archetype.entities());
             } else {
                 return None;
             }
         }
     }
 
-    pub fn get_pattern() -> QueryPattern {
-        QueryPattern::new(Fetch::get_type_ids(), Filter::get_filters())
+    pub fn get_filters() -> Vec<FilterKind> {
+        Fetch::type_ids()
+            .into_iter()
+            .map(FilterKind::With)
+            .chain(Filter::get_filters().into_iter())
+            .collect()
     }
 }
 
-impl<'a, Fetch: QueryFetch, Filter: QueryFilter> Iterator for Query<'a, Fetch, Filter> {
-    type Item = Fetch::Result<'a>;
+impl<'world, Fetch: QueryFetch, Filter: QueryFilter> Iterator for Query<'world, Fetch, Filter> {
+    type Item = Fetch::Result<'world>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.next_entity()
-            .map(|entity| Fetch::get_result(*entity, self.peek_archetype().unwrap()))
+            .map(|entity| Fetch::fetch(*entity, self.peek_archetype().unwrap()))
     }
 }
 

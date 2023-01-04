@@ -7,12 +7,12 @@ use crate::{
 
 use super::params::SystemParameter;
 
-pub struct SystemBuffer<'a> {
-    world: &'a World,
+pub struct SystemBuffer<'world> {
+    world: &'world World,
 }
 
-impl<'a> SystemBuffer<'a> {
-    pub fn new(world: &'a World) -> Self {
+impl<'world> SystemBuffer<'world> {
+    pub fn new(world: &'world World) -> Self {
         Self { world }
     }
 
@@ -59,9 +59,9 @@ impl<'a> SystemBuffer<'a> {
 }
 
 impl SystemParameter for SystemBuffer<'_> {
-    type Result<'a> = SystemBuffer<'a>;
+    type Result<'world> = SystemBuffer<'world>;
 
-    fn resolve<'a>(world: &'a World) -> Self::Result<'a> {
-        SystemBuffer::<'a>::new(world)
+    fn resolve(world: &World) -> Self::Result<'_> {
+        SystemBuffer::new(world)
     }
 }

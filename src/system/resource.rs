@@ -27,17 +27,17 @@ impl<T> Deref for Resource<'_, T> {
 }
 
 impl<T> SystemParameter for Option<Resource<'_, T>> {
-    type Result<'a> = Option<Resource<'a, T>>;
+    type Result<'world> = Option<Resource<'world, T>>;
 
-    fn resolve<'a>(world: &'a World) -> Self::Result<'a> {
+    fn resolve(world: &World) -> Self::Result<'_> {
         world.get_resource::<T>()
     }
 }
 
 impl<T> SystemParameter for Resource<'_, T> {
-    type Result<'a> = Resource<'a, T>;
+    type Result<'world> = Resource<'world, T>;
 
-    fn resolve<'a>(world: &'a World) -> Self::Result<'a> {
+    fn resolve(world: &World) -> Self::Result<'_> {
         world.get_resource::<T>().unwrap()
     }
 }
@@ -68,17 +68,17 @@ impl<T> DerefMut for ResourceMut<'_, T> {
 }
 
 impl<T> SystemParameter for Option<ResourceMut<'_, T>> {
-    type Result<'a> = Option<ResourceMut<'a, T>>;
+    type Result<'world> = Option<ResourceMut<'world, T>>;
 
-    fn resolve<'a>(world: &'a World) -> Self::Result<'a> {
+    fn resolve(world: &World) -> Self::Result<'_> {
         world.get_resource_mut::<T>()
     }
 }
 
 impl<T> SystemParameter for ResourceMut<'_, T> {
-    type Result<'a> = ResourceMut<'a, T>;
+    type Result<'world> = ResourceMut<'world, T>;
 
-    fn resolve<'a>(world: &'a World) -> Self::Result<'a> {
+    fn resolve(world: &World) -> Self::Result<'_> {
         world.get_resource_mut::<T>().unwrap()
     }
 }

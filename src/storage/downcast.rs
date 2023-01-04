@@ -1,7 +1,5 @@
-use std::any::Any;
-
 pub trait AsAny: 'static {
-    fn as_any(&self) -> &dyn Any;
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 /// Allows for downcasting a trait object to a concrete type.

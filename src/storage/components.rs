@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use crate::component::Component;
 
 use super::downcast::{AsAny, Downcast};
@@ -18,8 +20,8 @@ pub trait ComponentVec: AsAny {
     fn swap_remove(&mut self, idx: usize) -> Box<dyn Component>;
 }
 
-impl<T: 'static + Component> AsAny for Vec<T> {
-    fn as_any(&self) -> &dyn std::any::Any {
+impl<T: 'static> AsAny for Vec<T> {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }

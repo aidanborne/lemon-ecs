@@ -1,13 +1,13 @@
 use std::ops::{Deref, DerefMut};
 
 use crate::{
-    system::{BoxedSystem, IntoSystem},
+    system::{IntoSystem, System},
     world::World,
 };
 
 pub struct Engine {
     world: World,
-    systems: Vec<BoxedSystem>,
+    systems: Vec<Box<dyn System>>,
 }
 
 impl Engine {

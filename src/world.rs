@@ -12,7 +12,7 @@ use crate::{
     },
     query::{fetch::QueryFetch, filter::QueryFilter, Query, QueryChanged},
     storage::{
-        archetypes::{ArchetypeArena, QueryResult},
+        archetypes::{Archetypes, QueryResult},
         sparse_set::SparseSet,
     },
     system::resource::{Resource, ResourceMut},
@@ -31,7 +31,7 @@ pub enum WorldUpdate {
 pub struct World {
     available_ids: Vec<usize>,
     next_id: usize,
-    archetypes: ArchetypeArena,
+    archetypes: Archetypes,
     updates: RefCell<Vec<WorldUpdate>>,
     resources: HashMap<TypeId, Box<RefCell<dyn Any>>>,
     changes: HashMap<TypeId, SparseSet<ChangeRecord>>,
@@ -91,14 +91,14 @@ impl World {
             .unwrap_or(false)
     }
 
-    fn get_component_record(&mut self, id: usize, type_id: TypeId) -> &mut ChangeRecord {
-        let sparse_set = self.changes.entry(type_id).or_insert_with(SparseSet::new);
+    fn get_component_record(&mut self, id: usize, type_id: TypeId) -> Option<&mut ChangeRecord> {
+        let sparse_set = self.changes.get_mut(&type_id)?;
 
         if !sparse_set.contains(id) {
-            sparse_set.insert(id, ChangeRecord::default());
+            sparse_set.insert(id, ChangeRecord::new());
         }
 
-        sparse_set.get_mut(id).unwrap()
+        sparse_set.get_mut(id)
     }
 
     fn modify_bundle(
@@ -109,21 +109,26 @@ impl World {
     ) {
         let mut components: HashMap<TypeId, Box<dyn Component>> = bundle
             .into_iter()
-            .map(|component| (component.as_any().type_id(), component))
+            .map(|component| ((*component).as_any().type_id(), component))
             .collect();
 
         for change in changes {
             match change {
                 ComponentChange::Added(component) => {
-                    let type_id = component.as_any().type_id();
+                    let type_id = (*component).as_any().type_id();
                     let removed = components.insert(type_id, component);
-                    self.get_component_record(id, type_id).added(removed);
+
+                    if let Some(record) = self.get_component_record(id, type_id) {
+                        record.added(removed);
+                    }
                 }
                 ComponentChange::Removed(type_id) => {
                     let removed = components.remove(&type_id);
 
                     if let Some(component) = removed {
-                        self.get_component_record(id, type_id).removed(component);
+                        if let Some(record) = self.get_component_record(id, type_id) {
+                            record.removed(component);
+                        }
                     }
                 }
             }
@@ -139,27 +144,28 @@ impl World {
     }
 
     fn modify_entity(&mut self, id: usize, mut changes: impl Iterator<Item = ComponentChange>) {
-        let curr_archetype_id = self.archetypes.get_entity_archetype(id);
+        let curr_idx = self.archetypes.get_entity_archetype(id);
 
-        if curr_archetype_id.is_none() {
+        if curr_idx.is_none() {
             return;
         }
 
-        let curr_archetype_id = curr_archetype_id.unwrap();
-        let archetype = self.archetypes[curr_archetype_id].get_archetype();
-        let hash_set: HashSet<&TypeId> = archetype.iter().collect();
+        let curr_idx = curr_idx.unwrap();
+        let hash_set: HashSet<TypeId> = self.archetypes[curr_idx].type_ids();
 
         let mut breaking_change = None;
 
         while let Some(change) = changes.next() {
             match change {
                 ComponentChange::Added(component) => {
-                    let type_id = component.as_any().type_id();
+                    let type_id = (*component).as_any().type_id();
 
                     if hash_set.contains(&type_id) {
-                        let removed =
-                            self.archetypes[curr_archetype_id].replace_component(id, component);
-                        self.get_component_record(id, type_id).added(removed);
+                        let removed = self.archetypes[curr_idx].replace_component(id, component);
+
+                        if let Some(record) = self.get_component_record(id, type_id) {
+                            record.added(removed);
+                        }
                     } else {
                         breaking_change = Some(ComponentChange::Added(component));
                         break;
@@ -175,7 +181,7 @@ impl World {
         }
 
         if let Some(breaking_change) = breaking_change {
-            let bundle = self.archetypes[curr_archetype_id].remove(id).unwrap();
+            let bundle = self.archetypes[curr_idx].remove(id).unwrap();
             self.modify_bundle(id, bundle, std::iter::once(breaking_change).chain(changes));
         }
     }
@@ -203,13 +209,13 @@ impl World {
         let type_id = TypeId::of::<(Fetch, Filter)>();
 
         match self.archetypes.query_cached(type_id) {
-            Some(result) => Query::new(&self.archetypes, result.archetypes.clone()),
+            Some(result) => Query::new(&self.archetypes, result.indices()),
             None => {
                 let result = self
                     .archetypes
-                    .query_uncached(Query::<Fetch, Filter>::get_pattern());
+                    .query_uncached(Query::<Fetch, Filter>::get_filters());
 
-                let ids = result.archetypes.clone();
+                let ids = result.indices();
 
                 self.updates
                     .borrow_mut()
@@ -220,11 +226,13 @@ impl World {
         }
     }
 
+    /// Tracks changes to the given component type. This must be called for query_changed to work.
     pub fn track_changes(&mut self, type_id: TypeId) {
         self.changes.entry(type_id).or_insert_with(SparseSet::new);
     }
 
-    // TODO: Don't return an Option
+    /// Returns a `QueryChanged` iterator for the given component type.
+    /// If the component type is not being tracked, this will return `None`.
     pub fn query_changed<T: 'static + Component>(&self) -> Option<QueryChanged<T>> {
         let type_id = TypeId::of::<T>();
 

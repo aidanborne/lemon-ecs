@@ -1,7 +1,8 @@
 use proc_macro::TokenStream;
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
 use syn::{
     parse::{Parse, ParseStream},
+    punctuated::Punctuated,
     *,
 };
 
@@ -13,15 +14,8 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
     let gen = quote! {
         impl lemon_ecs::component::Component for #name {
             #[inline]
-            fn create_storage(&self) -> Box<dyn lemon_ecs::storage::components::ComponentVec> {
+            fn get_storage(&self) -> Box<dyn lemon_ecs::storage::components::ComponentVec> {
                 Box::new(Vec::<#name>::new())
-            }
-        }
-
-        impl lemon_ecs::storage::downcast::AsAny for #name {
-            #[inline]
-            fn as_any(&self) -> &dyn std::any::Any {
-                self
             }
         }
     };
@@ -126,12 +120,50 @@ fn is_bundle(field: &Field) -> bool {
         .is_some()
 }
 
+fn derive_into_bundle_helper<T: ToTokens>(
+    generics: Generics,
+    ident: Ident,
+    fields: Punctuated<Field, Token![,]>,
+    f: fn(usize, &Field) -> T,
+) -> TokenStream {
+    let mut components = Vec::<T>::new();
+    let mut bundles = Vec::<T>::new();
+    let mut types = Vec::new();
+
+    for (idx, field) in fields.iter().enumerate() {
+        if is_bundle(&field) {
+            bundles.push(f(idx, &field));
+        } else {
+            components.push(f(idx, &field));
+        }
+
+        types.push(&field.ty);
+    }
+
+    let gen = quote! {
+        impl #generics lemon_ecs::component::bundle::Bundleable for #ident #generics
+        where
+            #(#types: 'static + lemon_ecs::component::bundle::Bundleable),*
+        {
+            fn bundle(self) -> lemon_ecs::component::bundle::ComponentBundle {
+                let mut bundle: lemon_ecs::component::bundle::ComponentBundle = vec![];
+                #(
+                    bundle.push(Box::new(self.#components));
+                )*
+                #(
+                    bundle.extend(self.#bundles.into());
+                )*
+                bundle
+            }
+        }
+    };
+
+    gen.into()
+}
+
 #[proc_macro_derive(Bundleable)]
 pub fn derive_into_bundle(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
-
-    let generics = ast.generics;
-    let name = &ast.ident;
 
     let fields = match ast.data {
         Data::Struct(DataStruct { fields, .. }) => fields,
@@ -140,72 +172,14 @@ pub fn derive_into_bundle(input: TokenStream) -> TokenStream {
 
     match fields {
         Fields::Named(fields) => {
-            let mut component_fields = Vec::<&Ident>::new();
-            let mut bundle_fields = Vec::<&Ident>::new();
-            let mut types = Vec::<&Type>::new();
-
-            for field in fields.named.iter() {
-                if is_bundle(&field) {
-                    bundle_fields.push(&field.ident.as_ref().unwrap());
-                } else {
-                    component_fields.push(&field.ident.as_ref().unwrap());
-                }
-
-                types.push(&field.ty);
-            }
-
-            quote! {
-                impl #generics lemon_ecs::component::bundle::Bundleable for #name #generics
-                where
-                    #(#types: 'static + lemon_ecs::component::bundle::Bundleable),*
-                {
-                    fn bundle(self) -> lemon_ecs::component::bundle::ComponentBundle {
-                        let mut bundle: lemon_ecs::component::bundle::ComponentBundle = vec![];
-                        #(
-                            bundle.push(Box::new(self.#component_fields));
-                        )*
-                        #(
-                            bundle.extend(self.#bundle_fields.bundle());
-                        )*
-                        bundle
-                    }
-                }
-            }
-            .into()
+            derive_into_bundle_helper(ast.generics, ast.ident, fields.named, |_, field| {
+                field.ident.clone().unwrap()
+            })
         }
         Fields::Unnamed(fields) => {
-            let mut component_fields = Vec::<Index>::new();
-            let mut bundle_fields = Vec::<Index>::new();
-            let mut types = Vec::<&Type>::new();
-
-            for (i, field) in fields.unnamed.iter().enumerate() {
-                if is_bundle(&field) {
-                    bundle_fields.push(Index::from(i));
-                } else {
-                    component_fields.push(Index::from(i));
-                }
-
-                types.push(&field.ty);
-            }
-
-            quote! {
-                impl #generics lemon_ecs::component::bundle::Bundleable for #name #generics
-                where
-                    #(#types: 'static + lemon_ecs::component::bundle::Bundleable),*
-                {
-                    fn bundle(self) -> lemon_ecs::component::bundle::ComponentBundle {
-                        let mut bundle: lemon_ecs::component::bundle::ComponentBundle = vec![];
-                        #(
-                            bundle.push(Box::new(self.#component_fields));
-                        )*
-                        #(
-                            bundle.extend(self.#bundle_fields.bundle());
-                        )*
-                        bundle
-                    }
-                }
-            }
-            .into()
+            derive_into_bundle_helper(ast.generics, ast.ident, fields.unnamed, |idx, _| {
+                Index::from(idx)
+            })
         }
         Fields::Unit => panic!("Unit structs cannot derive Bundable"),
     }

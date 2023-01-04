@@ -1,41 +1,35 @@
-use crate::{component::Component, storage::entities::EntityStorage};
+use crate::{component::Component, storage::entities::EntitySparseSet};
 use lemon_ecs_macros::all_tuples;
 use std::any::TypeId;
 
 pub trait QueryFetch {
-    type Result<'a>;
+    type Result<'world>;
 
-    fn get_type_ids() -> Vec<TypeId>;
+    fn type_ids() -> Vec<TypeId>;
 
-    fn get_result<'world>(
-        entity: (usize, usize),
-        storage: &'world EntityStorage,
-    ) -> Self::Result<'world>;
+    fn fetch(entity: (usize, usize), storage: &EntitySparseSet) -> Self::Result<'_>;
 }
 
 impl<T: 'static + Component> QueryFetch for T {
-    type Result<'a> = &'a T;
+    type Result<'world> = &'world T;
 
-    fn get_type_ids() -> Vec<TypeId> {
+    fn type_ids() -> Vec<TypeId> {
         vec![TypeId::of::<T>()]
     }
 
-    fn get_result<'a>(
-        (_, storage_idx): (usize, usize),
-        storage: &'a EntityStorage,
-    ) -> Self::Result<'a> {
+    fn fetch((_, storage_idx): (usize, usize), storage: &EntitySparseSet) -> Self::Result<'_> {
         storage.get_component::<T>(storage_idx).unwrap()
     }
 }
 
 impl QueryFetch for usize {
-    type Result<'a> = usize;
+    type Result<'world> = usize;
 
-    fn get_type_ids() -> Vec<TypeId> {
+    fn type_ids() -> Vec<TypeId> {
         vec![]
     }
 
-    fn get_result<'a>((id, _): (usize, usize), _storage: &'a EntityStorage) -> Self::Result<'a> {
+    fn fetch((id, _): (usize, usize), _storage: &EntitySparseSet) -> Self::Result<'_> {
         id
     }
 }
@@ -43,14 +37,14 @@ impl QueryFetch for usize {
 macro_rules! impl_query_fetch {
     ($($t:ident),*) => {
         impl<$($t: 'static + QueryFetch),*> QueryFetch for ($($t,)*) {
-            type Result<'a> = ($($t::Result<'a>,)*);
+            type Result<'world> = ($($t::Result<'world>,)*);
 
-            fn get_type_ids() -> Vec<TypeId> {
-                vec![$($t::get_type_ids()),*].concat()
+            fn type_ids() -> Vec<TypeId> {
+                vec![$($t::type_ids()),*].concat()
             }
 
-            fn get_result<'a>(entity: (usize, usize), storage: &'a EntityStorage) -> Self::Result<'a> {
-                ($($t::get_result(entity, storage),)*)
+            fn fetch(entity: (usize, usize), storage: &EntitySparseSet) -> Self::Result<'_> {
+                ($($t::fetch(entity, storage),)*)
             }
         }
     };

@@ -1,47 +1,72 @@
-use std::{any::TypeId, marker::PhantomData};
+use std::{any::TypeId, collections::HashSet, marker::PhantomData};
 
 use lemon_ecs_macros::all_tuples;
 
-#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
-pub enum Filter {
+#[derive(PartialEq, Eq, Hash)]
+pub enum FilterKind {
     With(TypeId),
     Without(TypeId),
 }
 
-trait FilterGenerator {
-    fn get_filter() -> Filter;
+pub trait Filter {
+    fn filter(&self, type_ids: &HashSet<TypeId>) -> bool;
+}
+
+impl Filter for FilterKind {
+    fn filter(&self, type_ids: &HashSet<TypeId>) -> bool {
+        match self {
+            FilterKind::With(type_id) => type_ids.contains(type_id),
+            FilterKind::Without(type_id) => !type_ids.contains(type_id),
+        }
+    }
+}
+
+impl Filter for Vec<FilterKind> {
+    fn filter(&self, type_ids: &HashSet<TypeId>) -> bool {
+        for filter in self.iter() {
+            if !filter.filter(type_ids) {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+trait Filterable {
+    fn get_filter() -> FilterKind;
 }
 
 pub struct With<T>(PhantomData<T>);
 
-impl<T: 'static> FilterGenerator for With<T> {
-    fn get_filter() -> Filter {
-        Filter::With(TypeId::of::<T>())
+impl<T: 'static> Filterable for With<T> {
+    fn get_filter() -> FilterKind {
+        FilterKind::With(TypeId::of::<T>())
     }
 }
 
 pub struct Without<T>(PhantomData<T>);
 
-impl<T: 'static> FilterGenerator for Without<T> {
-    fn get_filter() -> Filter {
-        Filter::Without(TypeId::of::<T>())
+impl<T: 'static> Filterable for Without<T> {
+    fn get_filter() -> FilterKind {
+        FilterKind::Without(TypeId::of::<T>())
     }
 }
 
 pub trait QueryFilter {
-    fn get_filters() -> Vec<Filter>;
+    fn get_filters() -> Vec<FilterKind>;
 }
 
-impl<T: FilterGenerator> QueryFilter for T {
-    fn get_filters() -> Vec<Filter> {
+impl<T: Filterable> QueryFilter for T {
+    fn get_filters() -> Vec<FilterKind> {
         vec![T::get_filter()]
     }
 }
 
 macro_rules! impl_query_filter {
   ($($t:ident),*) => {
-      impl<$($t: FilterGenerator),*> QueryFilter for ($($t,)*) {
-          fn get_filters() -> Vec<Filter> {
+      impl<$($t: Filterable),*> QueryFilter for ($($t,)*) {
+          fn get_filters() -> Vec<FilterKind> {
               vec![$($t::get_filter()),*]
           }
       }
