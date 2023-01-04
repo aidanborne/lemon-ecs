@@ -28,12 +28,13 @@ pub fn world_get_component() {
     let position = world.get_component::<Position>(entity);
     let velocity = world.get_component::<Velocity>(entity);
 
-    assert_eq!(
-        position.unwrap(),
-        &Position(1, 2),
-        "Position should be (1, 2)"
-    );
+    assert_eq!(position, Some(&Position(1, 2)), "Position should be (1, 2)");
     assert!(velocity.is_none(), "Velocity should be None");
+
+    world.remove(entity, &[std::any::TypeId::of::<Position>()]);
+
+    let position = world.get_component::<Position>(entity);
+    assert!(position.is_none(), "Position should be None");
 }
 
 #[test]

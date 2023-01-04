@@ -18,7 +18,7 @@ impl<T> SparseSet<T> {
         self.len
     }
 
-    pub fn dense_idx(&self, key: usize) -> Option<usize> {
+    pub fn index_of(&self, key: usize) -> Option<usize> {
         if key >= self.sparse.len() {
             return None;
         }
@@ -32,7 +32,7 @@ impl<T> SparseSet<T> {
     }
 
     pub fn insert(&mut self, key: usize, value: T) {
-        if let Some(index) = self.dense_idx(key) {
+        if let Some(index) = self.index_of(key) {
             self.dense[index].1 = value;
             return;
         }
@@ -47,7 +47,7 @@ impl<T> SparseSet<T> {
     }
 
     pub fn remove(&mut self, key: usize) -> Option<T> {
-        if let Some(index) = self.dense_idx(key) {
+        if let Some(index) = self.index_of(key) {
             let entry = self.dense.swap_remove(index);
             self.len -= 1;
 
@@ -69,18 +69,18 @@ impl<T> SparseSet<T> {
     }
 
     pub fn contains(&self, key: usize) -> bool {
-        self.dense_idx(key).is_some()
+        self.index_of(key).is_some()
     }
 
     pub fn get(&self, key: usize) -> Option<&T> {
-        match self.dense_idx(key) {
+        match self.index_of(key) {
             Some(index) => Some(&self.dense[index].1),
             None => None,
         }
     }
 
     pub fn get_mut(&mut self, key: usize) -> Option<&mut T> {
-        match self.dense_idx(key) {
+        match self.index_of(key) {
             Some(index) => Some(&mut self.dense[index].1),
             None => None,
         }

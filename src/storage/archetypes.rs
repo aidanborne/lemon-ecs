@@ -1,12 +1,18 @@
 use std::{
     any::TypeId,
+    cell::RefCell,
     collections::{HashMap, HashSet},
     ops::{Index, IndexMut},
 };
 
 use crate::{
     component::bundle::ComponentBundle,
-    query::filter::{Filter, FilterKind},
+    query::{
+        fetch::QueryFetch,
+        filter::{Filter, FilterKind, QueryFilter},
+        Query,
+    },
+    world::entities::EntityId,
 };
 
 use super::entities::EntitySparseSet;
@@ -15,22 +21,16 @@ use super::entities::EntitySparseSet;
 #[repr(transparent)]
 pub struct ArchetypeIdx(usize);
 
-pub struct QueryResult {
+struct QueryResult {
     filter_kinds: Vec<FilterKind>,
-    indices: Vec<ArchetypeIdx>,
-}
-
-impl QueryResult {
-    pub fn indices(&self) -> Vec<ArchetypeIdx> {
-        self.indices.clone()
-    }
+    indices: Vec<usize>,
 }
 
 #[derive(Default)]
 pub struct Archetypes {
     archetypes: Vec<EntitySparseSet>,
     bundle_cache: HashMap<Vec<TypeId>, usize>,
-    query_cache: HashMap<TypeId, QueryResult>,
+    query_cache: RefCell<HashMap<TypeId, QueryResult>>,
 }
 
 impl Archetypes {
@@ -38,7 +38,7 @@ impl Archetypes {
         Self::default()
     }
 
-    pub fn get_entity_archetype(&self, id: usize) -> Option<ArchetypeIdx> {
+    pub fn get_entity_archetype(&self, id: EntityId) -> Option<ArchetypeIdx> {
         self.archetypes
             .iter()
             .position(move |archetype| archetype.contains(id))
@@ -61,9 +61,9 @@ impl Archetypes {
 
                 self.archetypes.push(storage);
 
-                for (_type_id, cache) in self.query_cache.iter_mut() {
+                for (_type_id, cache) in self.query_cache.borrow_mut().iter_mut() {
                     if cache.filter_kinds.filter(&hash_set) {
-                        cache.indices.push(ArchetypeIdx(idx));
+                        cache.indices.push(idx);
                     }
                 }
 
@@ -73,35 +73,47 @@ impl Archetypes {
         }
     }
 
-    /// Returns the archetypes that matche the given pattern.
-    /// Does not cache the result. Caching should be done manually.
-    pub fn query_uncached(&self, filter_kinds: Vec<FilterKind>) -> QueryResult {
-        let indices = self
-            .archetypes
+    pub fn get_query_archetypes<Fetch, Filter>(&self) -> std::vec::IntoIter<&EntitySparseSet>
+    where
+        Fetch: 'static + QueryFetch,
+        Filter: 'static + QueryFilter,
+    {
+        let mut query_cache = self.query_cache.borrow_mut();
+        let type_id = TypeId::of::<(Fetch, Filter)>();
+
+        let indices = match query_cache.get(&type_id) {
+            Some(result) => &result.indices,
+            None => {
+                let filter_kinds = Query::<Fetch, Filter>::get_filters();
+
+                let indices = self
+                    .archetypes
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(idx, archetype)| {
+                        if filter_kinds.filter(&archetype.type_ids()) {
+                            Some(idx)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                let result = QueryResult {
+                    filter_kinds,
+                    indices,
+                };
+
+                query_cache.insert(type_id, result);
+                &query_cache.get(&type_id).unwrap().indices
+            }
+        };
+
+        indices
             .iter()
-            .enumerate()
-            .filter_map(|(idx, storage)| {
-                if filter_kinds.filter(&storage.type_ids()) {
-                    Some(ArchetypeIdx(idx))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        QueryResult {
-            filter_kinds,
-            indices,
-        }
-    }
-
-    /// Returns the archetypes that match the given type.
-    pub fn query_cached(&self, type_id: TypeId) -> Option<&QueryResult> {
-        self.query_cache.get(&type_id)
-    }
-
-    pub fn cache_query(&mut self, type_id: TypeId, result: QueryResult) {
-        self.query_cache.insert(type_id, result);
+            .map(|idx| &self.archetypes[*idx])
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::{component::Component, storage::entities::EntitySparseSet, world::entities::EntityId};
+use crate::{component::Component, storage::entities::Entity, world::entities::EntityId};
 use lemon_ecs_macros::all_tuples;
 use std::any::TypeId;
 
@@ -7,7 +7,7 @@ pub trait QueryFetch {
 
     fn type_ids() -> Vec<TypeId>;
 
-    fn fetch(entity: (usize, usize), storage: &EntitySparseSet) -> Self::Result<'_>;
+    fn fetch<'world>(entity: &Entity<'world>) -> Self::Result<'world>;
 }
 
 impl<T: 'static + Component> QueryFetch for T {
@@ -17,8 +17,8 @@ impl<T: 'static + Component> QueryFetch for T {
         vec![TypeId::of::<T>()]
     }
 
-    fn fetch((_, storage_idx): (usize, usize), storage: &EntitySparseSet) -> Self::Result<'_> {
-        storage.get_component::<T>(storage_idx).unwrap()
+    fn fetch<'world>(entity: &Entity<'world>) -> Self::Result<'world> {
+        entity.get_component::<T>().unwrap()
     }
 }
 
@@ -29,8 +29,8 @@ impl QueryFetch for EntityId {
         vec![]
     }
 
-    fn fetch((id, _): (usize, usize), _storage: &EntitySparseSet) -> Self::Result<'_> {
-        id.into()
+    fn fetch<'world>(entity: &Entity<'world>) -> Self::Result<'world> {
+        entity.id()
     }
 }
 
@@ -43,8 +43,8 @@ macro_rules! impl_query_fetch {
                 vec![$($t::type_ids()),*].concat()
             }
 
-            fn fetch(entity: (usize, usize), storage: &EntitySparseSet) -> Self::Result<'_> {
-                ($($t::fetch(entity, storage),)*)
+            fn fetch<'world>(entity: &Entity<'world>) -> Self::Result<'world> {
+                ($($t::fetch(entity),)*)
             }
         }
     };

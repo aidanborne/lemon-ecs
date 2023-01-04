@@ -2,7 +2,7 @@ use lemon_ecs_macros::impl_tuple_bundle;
 
 use super::Component;
 
-pub type ComponentBundle = Vec<Box<dyn Component + 'static>>;
+pub type ComponentBundle = Vec<Box<dyn Component>>;
 
 pub trait Bundleable {
     fn bundle(self) -> ComponentBundle;

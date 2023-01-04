@@ -1,10 +1,9 @@
-use std::{iter::Peekable, marker::PhantomData};
+use std::marker::PhantomData;
 
 use crate::{
     component::{changes::ChangeRecord, Component},
     storage::{
-        archetypes::{ArchetypeIdx, Archetypes},
-        entities::EntitySparseSet,
+        entities::{self, EntitySparseSet},
         sparse_set,
     },
     world::{entities::EntityId, World},
@@ -19,40 +18,34 @@ pub mod fetch;
 pub mod filter;
 
 pub struct Query<'world, Fetch: QueryFetch, Filter: QueryFilter = ()> {
-    archetypes: &'world Archetypes,
-    archetype_idx: Peekable<std::vec::IntoIter<ArchetypeIdx>>,
-    entities: Option<sparse_set::Iter<'world, usize>>,
+    archetypes: std::vec::IntoIter<&'world EntitySparseSet>,
+    entities: Option<entities::Iter<'world>>,
     _fetch: PhantomData<Fetch>,
     _filter: PhantomData<Filter>,
 }
 
 impl<'world, Fetch: QueryFetch, Filter: QueryFilter> Query<'world, Fetch, Filter> {
-    pub fn new(archetypes: &'world Archetypes, indices: Vec<ArchetypeIdx>) -> Self {
+    pub fn new(archetypes: std::vec::IntoIter<&'world EntitySparseSet>) -> Self {
         Self {
             archetypes,
-            archetype_idx: indices.into_iter().peekable(),
             entities: None,
             _fetch: PhantomData,
             _filter: PhantomData,
         }
     }
 
-    fn peek_archetype(&mut self) -> Option<&'world EntitySparseSet> {
-        self.archetype_idx.peek().map(|idx| &self.archetypes[*idx])
-    }
-
-    fn next_entity(&mut self) -> Option<&'world (usize, usize)> {
+    fn next_entity(&mut self) -> Option<entities::Entity<'world>> {
         loop {
             if let Some(entities) = &mut self.entities {
-                if let Some(entity) = entities.next() {
-                    return Some(entity);
-                }
+                let entity = entities.next();
 
-                self.archetype_idx.next();
+                if entity.is_some() {
+                    return entity;
+                }
             }
 
-            if let Some(archetype) = self.peek_archetype() {
-                self.entities = Some(archetype.entities());
+            if let Some(archetype) = self.archetypes.next() {
+                self.entities = Some(archetype.iter());
             } else {
                 return None;
             }
@@ -72,19 +65,18 @@ impl<'world, Fetch: QueryFetch, Filter: QueryFilter> Iterator for Query<'world, 
     type Item = Fetch::Result<'world>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.next_entity()
-            .map(|entity| Fetch::fetch(*entity, self.peek_archetype().unwrap()))
+        self.next_entity().map(|entity| Fetch::fetch(&entity))
     }
 }
 
-pub struct ChangeResult<'world, T: Component> {
+pub struct EntityChange<'world, T: Component> {
     world: &'world World,
     record: &'world ChangeRecord,
     id: EntityId,
     _marker: PhantomData<T>,
 }
 
-impl<'world, T: Component> ChangeResult<'world, T> {
+impl<'world, T: Component> EntityChange<'world, T> {
     pub fn new(world: &'world World, id: EntityId, record: &'world ChangeRecord) -> Self {
         Self {
             world,
@@ -130,11 +122,11 @@ impl<'world, T: Component> QueryChanged<'world, T> {
 }
 
 impl<'world, T: Component> Iterator for QueryChanged<'world, T> {
-    type Item = ChangeResult<'world, T>;
+    type Item = EntityChange<'world, T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.iter
             .next()
-            .map(|(id, record)| ChangeResult::new(self.world, (*id).into(), record))
+            .map(|(id, record)| EntityChange::new(self.world, (*id).into(), record))
     }
 }
