@@ -11,26 +11,18 @@ use crate::{
         Component,
     },
     query::{fetch::QueryFetch, filter::QueryFilter, Query, QueryChanged},
-    storage::{
-        archetypes::{Archetypes, QueryResult},
-        sparse_set::SparseSet,
-    },
+    storage::{archetypes::Archetypes, sparse_set::SparseSet},
     system::resource::{Resource, ResourceMut},
 };
 
-pub enum WorldUpdate {
-    SpawnEntity(ComponentBundle),
-    DespawnEntity(usize),
-    ModifyEntity(usize, Vec<ComponentChange>),
-    CacheQuery(TypeId, QueryResult),
-    TrackChanges(TypeId),
-    InsertResource(Box<RefCell<dyn Any>>),
-    RemoveResource(TypeId),
-}
+use self::{entities::EntityId, updates::WorldUpdate};
 
+pub mod entities;
+pub mod updates;
+
+#[derive(Default)]
 pub struct World {
-    available_ids: Vec<usize>,
-    next_id: usize,
+    entities: entities::Entities,
     archetypes: Archetypes,
     updates: RefCell<Vec<WorldUpdate>>,
     resources: HashMap<TypeId, Box<RefCell<dyn Any>>>,
@@ -39,53 +31,35 @@ pub struct World {
 
 impl World {
     pub fn new() -> Self {
-        Self {
-            available_ids: Vec::new(),
-            next_id: 0,
-            archetypes: Default::default(),
-            updates: Default::default(),
-            resources: Default::default(),
-            changes: Default::default(),
-        }
+        Self::default()
     }
 
-    pub fn spawn(&mut self, bundle: impl Bundleable) -> usize {
-        let id = match self.available_ids.pop() {
-            Some(id) => id,
-            None => {
-                let id = self.next_id;
-                self.next_id += 1;
-                id
-            }
-        };
+    pub fn spawn(&mut self, components: impl Bundleable) -> EntityId {
+        let id = self.entities.spawn();
 
-        let bundle = bundle.bundle();
+        let bundle = components.bundle();
 
-        let idx = self.archetypes.get_bundle_archetype(&bundle);
+        let archetype = self.archetypes.get_bundle_archetype(&bundle);
+        self.archetypes[archetype].insert(id, bundle);
 
-        self.archetypes[idx].insert(id, bundle);
-        id
+        id.into()
     }
 
-    pub fn spawn_empty(&mut self) -> usize {
-        self.spawn(ComponentBundle::new())
-    }
-
-    pub fn despawn(&mut self, id: usize) -> Option<ComponentBundle> {
-        if let Some(idx) = self.archetypes.get_entity_archetype(id) {
-            let bundle = self.archetypes[idx].remove(id);
-            self.available_ids.push(id);
+    pub fn despawn(&mut self, id: EntityId) -> Option<ComponentBundle> {
+        if let Some(idx) = self.archetypes.get_entity_archetype(*id) {
+            let bundle = self.archetypes[idx].remove(*id);
+            self.entities.despawn(*id);
             bundle
         } else {
             None
         }
     }
 
-    pub fn has_component<T: 'static + Component>(&self, id: usize) -> bool {
+    pub fn has_component<T: 'static + Component>(&self, id: EntityId) -> bool {
         self.archetypes
-            .get_entity_archetype(id)
+            .get_entity_archetype(*id)
             .map(|idx| {
-                self.archetypes[idx].contains(id)
+                self.archetypes[idx].contains(*id)
                     && self.archetypes[idx].has_component(TypeId::of::<T>())
             })
             .unwrap_or(false)
@@ -101,12 +75,10 @@ impl World {
         sparse_set.get_mut(id)
     }
 
-    fn modify_bundle(
-        &mut self,
-        id: usize,
-        bundle: ComponentBundle,
-        changes: impl Iterator<Item = ComponentChange>,
-    ) {
+    fn modify_bundle<Iter>(&mut self, id: usize, bundle: ComponentBundle, changes: Iter)
+    where
+        Iter: Iterator<Item = ComponentChange>,
+    {
         let mut components: HashMap<TypeId, Box<dyn Component>> = bundle
             .into_iter()
             .map(|component| ((*component).as_any().type_id(), component))
@@ -186,26 +158,28 @@ impl World {
         }
     }
 
-    pub fn insert(&mut self, id: usize, components: impl Bundleable) {
+    pub fn insert(&mut self, id: EntityId, components: impl Bundleable) {
         self.modify_entity(
-            id,
+            *id,
             components.bundle().into_iter().map(ComponentChange::Added),
         );
     }
 
-    pub fn remove(&mut self, id: usize, types: &[TypeId]) {
-        self.modify_entity(id, types.iter().cloned().map(ComponentChange::Removed));
+    pub fn remove(&mut self, id: EntityId, types: &[TypeId]) {
+        self.modify_entity(*id, types.iter().cloned().map(ComponentChange::Removed));
     }
 
-    pub fn get_component<T: 'static + Component>(&self, id: usize) -> Option<&T> {
+    pub fn get_component<T: 'static + Component>(&self, id: EntityId) -> Option<&T> {
         self.archetypes
-            .get_entity_archetype(id)
-            .and_then(|idx| self.archetypes[idx].get_component::<T>(id))
+            .get_entity_archetype(*id)
+            .and_then(|idx| self.archetypes[idx].get_component::<T>(*id))
     }
 
-    pub fn query<Fetch: 'static + QueryFetch, Filter: 'static + QueryFilter>(
-        &self,
-    ) -> Query<Fetch, Filter> {
+    pub fn query<Fetch, Filter>(&self) -> Query<Fetch, Filter>
+    where
+        Fetch: 'static + QueryFetch,
+        Filter: 'static + QueryFilter,
+    {
         let type_id = TypeId::of::<(Fetch, Filter)>();
 
         match self.archetypes.query_cached(type_id) {
@@ -267,33 +241,10 @@ impl World {
 
     pub fn process_updates(&mut self) {
         for update in self.updates.replace(Vec::new()).into_iter() {
-            match update {
-                WorldUpdate::SpawnEntity(bundle) => {
-                    self.spawn(bundle);
-                }
-                WorldUpdate::DespawnEntity(id) => {
-                    self.despawn(id);
-                }
-                WorldUpdate::ModifyEntity(id, changes) => {
-                    self.modify_entity(id, changes.into_iter());
-                }
-                WorldUpdate::CacheQuery(type_id, result) => {
-                    self.archetypes.cache_query(type_id, result);
-                }
-                WorldUpdate::TrackChanges(type_id) => {
-                    self.changes.insert(type_id, SparseSet::new());
-                }
-                WorldUpdate::InsertResource(resource) => {
-                    let type_id = (*resource.borrow()).type_id();
-                    self.resources.insert(type_id, resource);
-                }
-                WorldUpdate::RemoveResource(type_id) => {
-                    self.resources.remove(&type_id);
-                }
-            };
+            update.process(self);
         }
 
-        for (_, changes) in self.changes.iter_mut() {
+        for (_type_id, changes) in self.changes.iter_mut() {
             changes.clear();
         }
     }

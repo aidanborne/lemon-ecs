@@ -45,25 +45,6 @@ impl Archetypes {
             .map(|idx| ArchetypeIdx(idx))
     }
 
-    pub fn get_existing_archetype(&mut self, type_ids: Vec<TypeId>) -> Option<ArchetypeIdx> {
-        match self.bundle_cache.get(&type_ids) {
-            Some(idx) => Some(ArchetypeIdx(*idx)),
-            None => {
-                let idx = self
-                    .archetypes
-                    .iter()
-                    .position(|storage| storage.type_ids::<Vec<TypeId>>() == type_ids);
-
-                if let Some(idx) = idx {
-                    self.bundle_cache.insert(type_ids, idx);
-                    Some(ArchetypeIdx(idx))
-                } else {
-                    None
-                }
-            }
-        }
-    }
-
     pub fn get_bundle_archetype(&mut self, bundle: &ComponentBundle) -> ArchetypeIdx {
         let archetype: Vec<TypeId> = bundle
             .iter()

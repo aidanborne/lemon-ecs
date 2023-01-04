@@ -1,4 +1,4 @@
-use crate::{component::Component, storage::entities::EntitySparseSet};
+use crate::{component::Component, storage::entities::EntitySparseSet, world::entities::EntityId};
 use lemon_ecs_macros::all_tuples;
 use std::any::TypeId;
 
@@ -22,15 +22,15 @@ impl<T: 'static + Component> QueryFetch for T {
     }
 }
 
-impl QueryFetch for usize {
-    type Result<'world> = usize;
+impl QueryFetch for EntityId {
+    type Result<'world> = EntityId;
 
     fn type_ids() -> Vec<TypeId> {
         vec![]
     }
 
     fn fetch((id, _): (usize, usize), _storage: &EntitySparseSet) -> Self::Result<'_> {
-        id
+        id.into()
     }
 }
 

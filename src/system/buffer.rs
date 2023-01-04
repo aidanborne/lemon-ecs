@@ -2,7 +2,7 @@ use std::{any::TypeId, cell::RefCell};
 
 use crate::{
     component::{bundle::Bundleable, changes::ComponentChange},
-    world::{World, WorldUpdate},
+    world::{entities::EntityId, updates::WorldUpdate, World},
 };
 
 use super::params::SystemParameter;
@@ -21,12 +21,12 @@ impl<'world> SystemBuffer<'world> {
             .push_update(WorldUpdate::SpawnEntity(bundle.bundle()));
     }
 
-    pub fn despawn(&self, id: usize) {
+    pub fn despawn(&self, id: EntityId) {
         self.world.push_update(WorldUpdate::DespawnEntity(id));
     }
 
-    pub fn insert(&self, id: usize, bundle: impl Bundleable) {
-        let changes = bundle
+    pub fn insert(&self, id: EntityId, components: impl Bundleable) {
+        let changes = components
             .bundle()
             .into_iter()
             .map(|component| ComponentChange::Added(component))
@@ -36,7 +36,7 @@ impl<'world> SystemBuffer<'world> {
             .push_update(WorldUpdate::ModifyEntity(id, changes));
     }
 
-    pub fn remove(&self, id: usize, types: &[TypeId]) {
+    pub fn remove(&self, id: EntityId, types: &[TypeId]) {
         let types = types
             .iter()
             .map(|type_id| ComponentChange::Removed(*type_id))

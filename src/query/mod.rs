@@ -7,7 +7,7 @@ use crate::{
         entities::EntitySparseSet,
         sparse_set,
     },
-    world::World,
+    world::{entities::EntityId, World},
 };
 
 use self::{
@@ -80,12 +80,12 @@ impl<'world, Fetch: QueryFetch, Filter: QueryFilter> Iterator for Query<'world, 
 pub struct ChangeResult<'world, T: Component> {
     world: &'world World,
     record: &'world ChangeRecord,
-    id: usize,
+    id: EntityId,
     _marker: PhantomData<T>,
 }
 
 impl<'world, T: Component> ChangeResult<'world, T> {
-    pub fn new(world: &'world World, id: usize, record: &'world ChangeRecord) -> Self {
+    pub fn new(world: &'world World, id: EntityId, record: &'world ChangeRecord) -> Self {
         Self {
             world,
             record,
@@ -108,7 +108,7 @@ impl<'world, T: Component> ChangeResult<'world, T> {
             .and_then(|removed| removed.as_any().downcast_ref::<T>())
     }
 
-    pub fn id(&self) -> usize {
+    pub fn id(&self) -> EntityId {
         self.id
     }
 }
@@ -135,6 +135,6 @@ impl<'world, T: Component> Iterator for QueryChanged<'world, T> {
     fn next(&mut self) -> Option<Self::Item> {
         self.iter
             .next()
-            .map(|(id, record)| ChangeResult::new(self.world, *id, record))
+            .map(|(id, record)| ChangeResult::new(self.world, (*id).into(), record))
     }
 }

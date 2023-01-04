@@ -4,7 +4,7 @@ use crate::{
     engine::Engine,
     query::{filter::Without, Query},
     system::{buffer::SystemBuffer, resource::ResourceMut},
-    world::World,
+    world::{entities::EntityId, World},
 };
 
 /// Needed to make the macros work
@@ -22,9 +22,8 @@ struct Movable(Position, Velocity);
 #[test]
 pub fn world_get_component() {
     let mut world = World::new();
-    let entity = world.spawn_empty();
 
-    world.insert(entity, Position(1, 2));
+    let entity = world.spawn(Position(1, 2));
 
     let position = world.get_component::<Position>(entity);
     let velocity = world.get_component::<Velocity>(entity);
@@ -41,8 +40,7 @@ pub fn world_get_component() {
 pub fn world_query_no_filters() {
     let mut world = World::new();
 
-    let entity = world.spawn_empty();
-    world.insert(entity, Position(1, 2));
+    let _entity = world.spawn(Position(1, 2));
 
     let mut query = world.query::<Position, ()>();
 
@@ -58,9 +56,7 @@ pub fn world_query_no_filters() {
 pub fn world_query_filters() {
     let mut world = World::new();
 
-    let entity = world.spawn_empty();
-    world.insert(entity, Position(1, 2));
-    world.insert(entity, Velocity(3, 4));
+    let _entity = world.spawn((Position(1, 2), Velocity(3, 4)));
 
     let mut query = world.query::<Position, ()>();
 
@@ -110,11 +106,9 @@ pub fn world_query_changed() {
 pub fn world_multiple_entities() {
     let mut world = World::new();
 
-    let entity1 = world.spawn_empty();
-    world.insert(entity1, Position(1, 2));
+    let _entity1 = world.spawn(Position(1, 2));
 
-    let entity2 = world.spawn_empty();
-    world.insert(entity2, Position(3, 4));
+    let _entity2 = world.spawn(Position(3, 4));
 
     let mut query = world.query::<Position, ()>();
 
@@ -127,7 +121,7 @@ pub fn world_multiple_entities() {
     assert!(query.next().is_none(), "Query should be empty");
 }
 
-fn print_system(buffer: SystemBuffer, query: Query<(usize, Position, Velocity)>) {
+fn print_system(buffer: SystemBuffer, query: Query<(EntityId, Position, Velocity)>) {
     for (id, position, velocity) in query {
         buffer.insert(
             id,
@@ -141,11 +135,7 @@ pub fn engine_run() {
     let mut engine = Engine::new();
     engine.add_system(print_system);
 
-    let entity = engine.spawn_empty();
-
-    engine.insert(entity, Position(1, 2));
-
-    engine.insert(entity, Velocity(3, 4));
+    let entity = engine.spawn((Position(1, 2), Velocity(3, 4)));
 
     for _ in 0..10 {
         engine.update();
