@@ -1,12 +1,7 @@
 pub struct SparseSet<T> {
-    dense: Vec<Entry<T>>,
+    dense: Vec<(usize, T)>,
     sparse: Vec<usize>,
     len: usize,
-}
-
-pub struct Entry<T> {
-    pub key: usize,
-    pub value: T,
 }
 
 #[allow(dead_code)]
@@ -29,7 +24,7 @@ impl<T> SparseSet<T> {
         }
 
         let index = self.sparse[key];
-        if index >= self.len || self.dense[index].key != key {
+        if index >= self.len || self.dense[index].0 != key {
             return None;
         }
 
@@ -38,7 +33,7 @@ impl<T> SparseSet<T> {
 
     pub fn insert(&mut self, key: usize, value: T) {
         if let Some(index) = self.dense_idx(key) {
-            self.dense[index].value = value;
+            self.dense[index].1 = value;
             return;
         }
 
@@ -47,7 +42,7 @@ impl<T> SparseSet<T> {
         }
 
         self.sparse[key] = self.len;
-        self.dense.push(Entry { key, value });
+        self.dense.push((key, value));
         self.len += 1;
     }
 
@@ -57,11 +52,11 @@ impl<T> SparseSet<T> {
             self.len -= 1;
 
             if index < self.len {
-                let swapped_key = self.dense[index].key;
+                let swapped_key = self.dense[index].0;
                 self.sparse[swapped_key] = index;
             }
 
-            Some(entry.value)
+            Some(entry.1)
         } else {
             None
         }
@@ -79,19 +74,19 @@ impl<T> SparseSet<T> {
 
     pub fn get(&self, key: usize) -> Option<&T> {
         match self.dense_idx(key) {
-            Some(index) => Some(&self.dense[index].value),
+            Some(index) => Some(&self.dense[index].1),
             None => None,
         }
     }
 
     pub fn get_mut(&mut self, key: usize) -> Option<&mut T> {
         match self.dense_idx(key) {
-            Some(index) => Some(&mut self.dense[index].value),
+            Some(index) => Some(&mut self.dense[index].1),
             None => None,
         }
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, Entry<T>> {
+    pub fn iter(&self) -> Iter<'_, T> {
         self.dense.iter()
     }
 
@@ -128,28 +123,37 @@ impl<T> Default for SparseSet<T> {
     }
 }
 
-pub type Iter<'a, T> = std::slice::Iter<'a, Entry<T>>;
+pub type Iter<'a, T> = std::slice::Iter<'a, (usize, T)>;
 
 pub struct Keys<'a, T> {
-    dense: std::slice::Iter<'a, Entry<T>>,
+    dense: Iter<'a, T>,
 }
 
 impl<'a, T> Iterator for Keys<'a, T> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.dense.next().map(|entry| entry.key)
+        self.dense.next().map(|entry| entry.0)
     }
 }
 
 pub struct Values<'a, T> {
-    dense: std::slice::Iter<'a, Entry<T>>,
+    dense: Iter<'a, T>,
 }
 
 impl<'a, T> Iterator for Values<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.dense.next().map(|entry| &entry.value)
+        self.dense.next().map(|entry| &entry.1)
+    }
+}
+
+impl<T> IntoIterator for SparseSet<T> {
+    type Item = (usize, T);
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.dense.into_iter()
     }
 }

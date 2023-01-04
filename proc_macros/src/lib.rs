@@ -12,12 +12,16 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
 
     let gen = quote! {
         impl lemon_ecs::component::Component for #name {
+            #[inline]
             fn create_storage(&self) -> Box<dyn lemon_ecs::storage::components::ComponentVec> {
                 Box::new(Vec::<#name>::new())
             }
+        }
 
-            fn component_id(&self) -> std::any::TypeId {
-                std::any::TypeId::of::<#name>()
+        impl lemon_ecs::storage::downcast::AsAny for #name {
+            #[inline]
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
             }
         }
     };
@@ -151,12 +155,12 @@ pub fn derive_into_bundle(input: TokenStream) -> TokenStream {
             }
 
             quote! {
-                impl #generics lemon_ecs::component::Bundleable for #name #generics
+                impl #generics lemon_ecs::component::bundle::Bundleable for #name #generics
                 where
-                    #(#types: 'static + lemon_ecs::component::Bundleable),*
+                    #(#types: 'static + lemon_ecs::component::bundle::Bundleable),*
                 {
-                    fn bundle(self) -> lemon_ecs::component::ComponentBundle {
-                        let mut bundle: lemon_ecs::component::ComponentBundle = vec![];
+                    fn bundle(self) -> lemon_ecs::component::bundle::ComponentBundle {
+                        let mut bundle: lemon_ecs::component::bundle::ComponentBundle = vec![];
                         #(
                             bundle.push(Box::new(self.#component_fields));
                         )*
@@ -185,12 +189,12 @@ pub fn derive_into_bundle(input: TokenStream) -> TokenStream {
             }
 
             quote! {
-                impl #generics lemon_ecs::component::Bundleable for #name #generics
+                impl #generics lemon_ecs::component::bundle::Bundleable for #name #generics
                 where
-                    #(#types: 'static + lemon_ecs::component::Bundleable),*
+                    #(#types: 'static + lemon_ecs::component::bundle::Bundleable),*
                 {
-                    fn bundle(self) -> lemon_ecs::component::ComponentBundle {
-                        let mut bundle: lemon_ecs::component::ComponentBundle = vec![];
+                    fn bundle(self) -> lemon_ecs::component::bundle::ComponentBundle {
+                        let mut bundle: lemon_ecs::component::bundle::ComponentBundle = vec![];
                         #(
                             bundle.push(Box::new(self.#component_fields));
                         )*

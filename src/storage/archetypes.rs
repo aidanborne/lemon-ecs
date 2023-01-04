@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    component::ComponentBundle,
+    component::bundle::ComponentBundle,
     query::{archetype::Archetype, pattern::QueryPattern},
 };
 
@@ -61,7 +61,7 @@ impl ArchetypeArena {
     pub fn get_bundle_archetype(&mut self, bundle: &ComponentBundle) -> ArchetypeId {
         let archetype = bundle
             .iter()
-            .map(|component| component.component_id())
+            .map(|component| component.as_any().type_id())
             .collect();
 
         match self.bundle_cache.get(&archetype) {
@@ -127,27 +127,5 @@ impl Index<ArchetypeId> for ArchetypeArena {
 impl IndexMut<ArchetypeId> for ArchetypeArena {
     fn index_mut(&mut self, index: ArchetypeId) -> &mut Self::Output {
         &mut self.archetypes[index.0]
-    }
-}
-
-pub struct Iter<'a> {
-    archetypes: &'a ArchetypeArena,
-    ids: std::vec::IntoIter<ArchetypeId>,
-}
-
-impl<'a> Iter<'a> {
-    pub fn new(archetypes: &'a ArchetypeArena, ids: Vec<ArchetypeId>) -> Self {
-        Self {
-            archetypes,
-            ids: ids.into_iter(),
-        }
-    }
-}
-
-impl<'a> Iterator for Iter<'a> {
-    type Item = &'a EntityStorage;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.ids.next().map(|idx| &self.archetypes[idx])
     }
 }

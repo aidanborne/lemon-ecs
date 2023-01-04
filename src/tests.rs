@@ -24,7 +24,7 @@ pub fn world_get_component() {
     let mut world = World::new();
     let entity = world.spawn_empty();
 
-    world.add_component::<Position>(entity, Position(1, 2));
+    world.insert(entity, Position(1, 2));
 
     let position = world.get_component::<Position>(entity);
     let velocity = world.get_component::<Velocity>(entity);
@@ -38,19 +38,19 @@ pub fn world_get_component() {
 }
 
 #[test]
-pub fn world_query_basic() {
+pub fn world_query_no_filters() {
     let mut world = World::new();
 
     let entity = world.spawn_empty();
-    world.add_component::<Position>(entity, Position(1, 2));
+    world.insert(entity, Position(1, 2));
 
-    let mut query = world.query::<Position>();
+    let mut query = world.query::<Position, ()>();
 
     let position = query.next().unwrap();
     assert_eq!(position, &Position(1, 2), "Position should be (1, 2)");
     assert!(query.next().is_none(), "Query should be empty");
 
-    let mut query = world.query::<(Position, Velocity)>();
+    let mut query = world.query::<(Position, Velocity), ()>();
     assert!(query.next().is_none(), "Query should be empty");
 }
 
@@ -59,16 +59,50 @@ pub fn world_query_filters() {
     let mut world = World::new();
 
     let entity = world.spawn_empty();
-    world.add_component::<Position>(entity, Position(1, 2));
-    world.add_component::<Velocity>(entity, Velocity(3, 4));
+    world.insert(entity, Position(1, 2));
+    world.insert(entity, Velocity(3, 4));
 
-    let mut query = world.query::<Query<Position>>();
+    let mut query = world.query::<Position, ()>();
 
     let position = query.next().unwrap();
     assert_eq!(position, &Position(1, 2), "Position should be (1, 2)");
     assert!(query.next().is_none(), "Query should be empty");
 
-    let mut query = world.query::<Query<Position, Without<Velocity>>>();
+    let mut query = world.query::<Position, Without<Velocity>>();
+    assert!(query.next().is_none(), "Query should be empty");
+}
+
+#[test]
+pub fn world_query_changed() {
+    let mut world = World::new();
+
+    let _entity_a = world.spawn(Position(1, 2));
+    let entity_b = world.spawn(Position(3, 4));
+
+    world.track_changes(std::any::TypeId::of::<Position>());
+
+    world.insert(entity_b, Position(5, 6));
+    world.insert(entity_b, Position(7, 8));
+
+    let mut query = world
+        .query_changed::<Position>()
+        .expect("Query should be Some");
+
+    let record = query.next().unwrap();
+
+    assert_eq!(record.id(), entity_b, "Entity should be entity_b");
+
+    assert_eq!(
+        record.removed().unwrap(),
+        &Position(3, 4),
+        "Removed Position should be (3, 4)"
+    );
+    assert_eq!(
+        record.added().unwrap(),
+        &Position(7, 8),
+        "Added Position should be (5, 6)"
+    );
+
     assert!(query.next().is_none(), "Query should be empty");
 }
 
@@ -77,12 +111,12 @@ pub fn world_multiple_entities() {
     let mut world = World::new();
 
     let entity1 = world.spawn_empty();
-    world.add_component::<Position>(entity1, Position(1, 2));
+    world.insert(entity1, Position(1, 2));
 
     let entity2 = world.spawn_empty();
-    world.add_component::<Position>(entity2, Position(3, 4));
+    world.insert(entity2, Position(3, 4));
 
-    let mut query = world.query::<Position>();
+    let mut query = world.query::<Position, ()>();
 
     let position = query.next().unwrap();
     assert_eq!(position, &Position(1, 2), "Position should be (1, 2)");
@@ -109,9 +143,9 @@ pub fn engine_run() {
 
     let entity = engine.spawn_empty();
 
-    engine.add_component::<Position>(entity, Position(1, 2));
+    engine.insert(entity, Position(1, 2));
 
-    engine.add_component::<Velocity>(entity, Velocity(3, 4));
+    engine.insert(entity, Velocity(3, 4));
 
     for _ in 0..10 {
         engine.update();

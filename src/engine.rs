@@ -27,9 +27,8 @@ impl Engine {
     pub fn update(&mut self) {
         for system in self.systems.iter() {
             system.update(&self.world);
+            self.world.process_updates();
         }
-
-        self.world.process_updates();
     }
 }
 

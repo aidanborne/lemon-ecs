@@ -1,22 +1,29 @@
 use std::{
     any::{Any, TypeId},
     cell::{Ref, RefCell, RefMut},
-    collections::HashMap,
+    collections::{HashMap, HashSet},
 };
 
 use crate::{
-    component::{Bundleable, Component, ComponentBundle},
-    query::{Query, Queryable},
-    storage::archetypes::{self, ArchetypeArena, QueryResult},
+    component::{
+        bundle::{Bundleable, ComponentBundle},
+        changes::{ChangeRecord, ComponentChange},
+        Component,
+    },
+    query::{fetch::QueryFetch, filter::QueryFilter, Query, QueryChanged},
+    storage::{
+        archetypes::{ArchetypeArena, QueryResult},
+        sparse_set::SparseSet,
+    },
     system::resource::{Resource, ResourceMut},
 };
 
 pub enum WorldUpdate {
     SpawnEntity(ComponentBundle),
     DespawnEntity(usize),
-    InsertComponents(usize, ComponentBundle),
-    RemoveComponents(usize, Vec<TypeId>),
+    ModifyEntity(usize, Vec<ComponentChange>),
     CacheQuery(TypeId, QueryResult),
+    TrackChanges(TypeId),
     InsertResource(Box<RefCell<dyn Any>>),
     RemoveResource(TypeId),
 }
@@ -27,6 +34,7 @@ pub struct World {
     archetypes: ArchetypeArena,
     updates: RefCell<Vec<WorldUpdate>>,
     resources: HashMap<TypeId, Box<RefCell<dyn Any>>>,
+    changes: HashMap<TypeId, SparseSet<ChangeRecord>>,
 }
 
 impl World {
@@ -37,6 +45,7 @@ impl World {
             archetypes: Default::default(),
             updates: Default::default(),
             resources: Default::default(),
+            changes: Default::default(),
         }
     }
 
@@ -82,38 +91,104 @@ impl World {
             .unwrap_or(false)
     }
 
-    pub fn add_component<T: 'static + Component>(&mut self, id: usize, component: T) {
-        if let Some(curr_idx) = self.archetypes.get_entity_archetype(id) {
-            if self.archetypes[curr_idx].has_component(TypeId::of::<T>()) {
-                self.archetypes[curr_idx].replace_component(id, component);
-            } else {
-                let mut bundle = self.archetypes[curr_idx].remove(id).unwrap();
-                bundle.push(Box::new(component));
+    fn get_component_record(&mut self, id: usize, type_id: TypeId) -> &mut ChangeRecord {
+        let sparse_set = self.changes.entry(type_id).or_insert_with(SparseSet::new);
 
-                let new_idx = self.archetypes.get_bundle_archetype(&bundle);
-                self.archetypes[new_idx].insert(id, bundle);
+        if !sparse_set.contains(id) {
+            sparse_set.insert(id, ChangeRecord::default());
+        }
+
+        sparse_set.get_mut(id).unwrap()
+    }
+
+    fn modify_bundle(
+        &mut self,
+        id: usize,
+        bundle: ComponentBundle,
+        changes: impl Iterator<Item = ComponentChange>,
+    ) {
+        let mut components: HashMap<TypeId, Box<dyn Component>> = bundle
+            .into_iter()
+            .map(|component| (component.as_any().type_id(), component))
+            .collect();
+
+        for change in changes {
+            match change {
+                ComponentChange::Added(component) => {
+                    let type_id = component.as_any().type_id();
+                    let removed = components.insert(type_id, component);
+                    self.get_component_record(id, type_id).added(removed);
+                }
+                ComponentChange::Removed(type_id) => {
+                    let removed = components.remove(&type_id);
+
+                    if let Some(component) = removed {
+                        self.get_component_record(id, type_id).removed(component);
+                    }
+                }
             }
+        }
+
+        let bundle: ComponentBundle = components
+            .into_iter()
+            .map(|(_, component)| component)
+            .collect();
+
+        let archetype_id = self.archetypes.get_bundle_archetype(&bundle);
+        self.archetypes[archetype_id].insert(id, bundle);
+    }
+
+    fn modify_entity(&mut self, id: usize, mut changes: impl Iterator<Item = ComponentChange>) {
+        let curr_archetype_id = self.archetypes.get_entity_archetype(id);
+
+        if curr_archetype_id.is_none() {
+            return;
+        }
+
+        let curr_archetype_id = curr_archetype_id.unwrap();
+        let archetype = self.archetypes[curr_archetype_id].get_archetype();
+        let hash_set: HashSet<&TypeId> = archetype.iter().collect();
+
+        let mut breaking_change = None;
+
+        while let Some(change) = changes.next() {
+            match change {
+                ComponentChange::Added(component) => {
+                    let type_id = component.as_any().type_id();
+
+                    if hash_set.contains(&type_id) {
+                        let removed =
+                            self.archetypes[curr_archetype_id].replace_component(id, component);
+                        self.get_component_record(id, type_id).added(removed);
+                    } else {
+                        breaking_change = Some(ComponentChange::Added(component));
+                        break;
+                    }
+                }
+                ComponentChange::Removed(type_id) => {
+                    if hash_set.contains(&type_id) {
+                        breaking_change = Some(change);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if let Some(breaking_change) = breaking_change {
+            let bundle = self.archetypes[curr_archetype_id].remove(id).unwrap();
+            self.modify_bundle(id, bundle, std::iter::once(breaking_change).chain(changes));
         }
     }
 
-    pub fn remove_component<T: 'static + Component>(&mut self, id: usize) -> Option<T> {
-        if let Some(idx) = self.archetypes.get_entity_archetype(id) {
-            if self.archetypes[idx].has_component(TypeId::of::<T>()) {
-                let mut bundle = self.archetypes[idx].remove(id).unwrap();
+    pub fn insert(&mut self, id: usize, components: impl Bundleable) {
+        self.modify_entity(
+            id,
+            components.bundle().into_iter().map(ComponentChange::Added),
+        );
+    }
 
-                let comp_idx = bundle
-                    .iter()
-                    .position(|component| component.component_id() == TypeId::of::<T>())
-                    .unwrap();
-
-                let component = bundle.swap_remove(comp_idx);
-                self.archetypes[idx].insert(id, bundle);
-
-                return component.downcast::<T>().ok().map(|component| *component);
-            }
-        }
-
-        None
+    pub fn remove(&mut self, id: usize, types: &[TypeId]) {
+        self.modify_entity(id, types.iter().cloned().map(ComponentChange::Removed));
     }
 
     pub fn get_component<T: 'static + Component>(&self, id: usize) -> Option<&T> {
@@ -122,34 +197,42 @@ impl World {
             .and_then(|idx| self.archetypes[idx].get_component::<T>(id))
     }
 
-    pub fn update_entity<F: FnOnce(&mut ComponentBundle)>(&mut self, id: usize, func: F) {
-        if let Some(idx) = self.archetypes.get_entity_archetype(id) {
-            let mut bundle = self.archetypes[idx].remove(id).unwrap();
-            func(&mut bundle);
-
-            let new_idx = self.archetypes.get_bundle_archetype(&bundle);
-            self.archetypes[new_idx].insert(id, bundle);
-        }
-    }
-
-    pub fn query<'a, T: Queryable<'a>>(&'a self) -> Query<'a, T::Fetch, T::Filter> {
-        let type_id = TypeId::of::<(T::Fetch, T::Filter)>();
+    pub fn query<Fetch: 'static + QueryFetch, Filter: 'static + QueryFilter>(
+        &self,
+    ) -> Query<Fetch, Filter> {
+        let type_id = TypeId::of::<(Fetch, Filter)>();
 
         match self.archetypes.query_cached(type_id) {
-            Some(result) => Query::new(archetypes::Iter::new(
-                &self.archetypes,
-                result.archetypes.clone(),
-            )),
+            Some(result) => Query::new(&self.archetypes, result.archetypes.clone()),
             None => {
-                let result = self.archetypes.query_uncached(T::get_pattern());
+                let result = self
+                    .archetypes
+                    .query_uncached(Query::<Fetch, Filter>::get_pattern());
+
                 let ids = result.archetypes.clone();
 
                 self.updates
                     .borrow_mut()
                     .push(WorldUpdate::CacheQuery(type_id, result));
 
-                Query::new(archetypes::Iter::new(&self.archetypes, ids))
+                Query::new(&self.archetypes, ids)
             }
+        }
+    }
+
+    pub fn track_changes(&mut self, type_id: TypeId) {
+        self.changes.entry(type_id).or_insert_with(SparseSet::new);
+    }
+
+    // TODO: Don't return an Option
+    pub fn query_changed<T: 'static + Component>(&self) -> Option<QueryChanged<T>> {
+        let type_id = TypeId::of::<T>();
+
+        if let Some(changes) = self.changes.get(&type_id) {
+            Some(QueryChanged::new(&self, changes.iter()))
+        } else {
+            self.push_update(WorldUpdate::TrackChanges(type_id));
+            None
         }
     }
 
@@ -183,22 +266,14 @@ impl World {
                 WorldUpdate::DespawnEntity(id) => {
                     self.despawn(id);
                 }
-                WorldUpdate::InsertComponents(id, bundle) => {
-                    if let Some(idx) = self.archetypes.get_entity_archetype(id) {
-                        let mut curr_bundle = self.archetypes[idx].remove(id).unwrap();
-                        curr_bundle.extend(bundle);
-                        self.archetypes[idx].insert(id, curr_bundle);
-                    }
-                }
-                WorldUpdate::RemoveComponents(id, types) => {
-                    if let Some(idx) = self.archetypes.get_entity_archetype(id) {
-                        let mut curr_bundle = self.archetypes[idx].remove(id).unwrap();
-                        curr_bundle.retain(|component| !types.contains(&component.component_id()));
-                        self.archetypes[idx].insert(id, curr_bundle);
-                    }
+                WorldUpdate::ModifyEntity(id, changes) => {
+                    self.modify_entity(id, changes.into_iter());
                 }
                 WorldUpdate::CacheQuery(type_id, result) => {
                     self.archetypes.cache_query(type_id, result);
+                }
+                WorldUpdate::TrackChanges(type_id) => {
+                    self.changes.insert(type_id, SparseSet::new());
                 }
                 WorldUpdate::InsertResource(resource) => {
                     let type_id = (*resource.borrow()).type_id();
@@ -208,6 +283,10 @@ impl World {
                     self.resources.remove(&type_id);
                 }
             };
+        }
+
+        for (_, changes) in self.changes.iter_mut() {
+            changes.clear();
         }
     }
 

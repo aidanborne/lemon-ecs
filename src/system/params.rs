@@ -9,13 +9,13 @@ pub trait SystemParameter {
     fn resolve<'a>(world: &'a World) -> Self::Result<'a>;
 }
 
-impl<Fetch: 'static + QueryFetch, Filter: QueryFilter + 'static> SystemParameter
+impl<Fetch: 'static + QueryFetch, Filter: 'static + QueryFilter> SystemParameter
     for Query<'_, Fetch, Filter>
 {
     type Result<'a> = Query<'a, Fetch, Filter>;
 
     fn resolve<'a>(world: &'a World) -> Self::Result<'a> {
-        world.query::<Query<'a, Fetch, Filter>>()
+        world.query::<Fetch, Filter>()
     }
 }
 

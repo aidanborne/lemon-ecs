@@ -1,38 +1,50 @@
-use std::any::Any;
-
 use crate::component::Component;
 
-/// A trait for a vector of components.
-/// The indices of the vector do not correspond to the entity id.
-pub trait ComponentVec {
-    fn as_any(&self) -> &dyn Any;
+use super::downcast::{AsAny, Downcast};
 
-    fn insert(&mut self, id: usize, component: Box<dyn Component>);
-    fn remove(&mut self, id: usize) -> Box<dyn Component>;
+/// A trait for component vectors that allows for replacing and swapping components.
+/// Indices may not correspond to entity IDs.
+pub trait ComponentVec: AsAny {
+    /// Replaces the component at the given index with the given component.
+    /// Returns the component that was previously at the given index.
+    /// If the index is out of bounds, the component is appended to the vector.
+    fn replace_index(
+        &mut self,
+        idx: usize,
+        value: Box<dyn Component>,
+    ) -> Option<Box<dyn Component>>;
 
-    fn as_empty_boxed(&self) -> Box<dyn ComponentVec>;
+    /// Swap-removes the component at the given index and returns it.
+    fn swap_remove(&mut self, idx: usize) -> Box<dyn Component>;
+}
+
+impl<T: 'static + Component> AsAny for Vec<T> {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 impl<T: 'static + Component> ComponentVec for Vec<T> {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn insert(&mut self, idx: usize, component: Box<dyn Component>) {
+    fn replace_index(
+        &mut self,
+        idx: usize,
+        component: Box<dyn Component>,
+    ) -> Option<Box<dyn Component>> {
         if let Ok(component) = component.downcast::<T>() {
-            if idx >= self.capacity() {
-                self.reserve(idx - self.capacity() + 1);
+            if self.len() > idx {
+                let removed = std::mem::replace::<T>(&mut self[idx], *component);
+                return Some(Box::new(removed));
+            } else {
+                self.push(*component);
+                return None;
             }
-
-            self.insert(idx, *component);
         }
+
+        None
     }
 
-    fn remove(&mut self, idx: usize) -> Box<dyn Component> {
+    #[inline]
+    fn swap_remove(&mut self, idx: usize) -> Box<dyn Component> {
         Box::new(self.swap_remove(idx))
-    }
-
-    fn as_empty_boxed(&self) -> Box<dyn ComponentVec> {
-        Box::new(Self::new())
     }
 }

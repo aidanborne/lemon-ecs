@@ -1,7 +1,7 @@
 use std::{any::TypeId, cell::RefCell};
 
 use crate::{
-    component::Bundleable,
+    component::{bundle::Bundleable, changes::ComponentChange},
     world::{World, WorldUpdate},
 };
 
@@ -26,13 +26,23 @@ impl<'a> SystemBuffer<'a> {
     }
 
     pub fn insert(&self, id: usize, bundle: impl Bundleable) {
+        let changes = bundle
+            .bundle()
+            .into_iter()
+            .map(|component| ComponentChange::Added(component))
+            .collect();
+
         self.world
-            .push_update(WorldUpdate::InsertComponents(id, bundle.bundle()));
+            .push_update(WorldUpdate::ModifyEntity(id, changes));
     }
 
-    pub fn remove(&self, id: usize, types: Vec<TypeId>) {
-        self.world
-            .push_update(WorldUpdate::RemoveComponents(id, types));
+    pub fn remove(&self, id: usize, types: &[TypeId]) {
+        let types = types
+            .iter()
+            .map(|type_id| ComponentChange::Removed(*type_id))
+            .collect();
+
+        self.world.push_update(WorldUpdate::ModifyEntity(id, types));
     }
 
     pub fn insert_resource<T: 'static>(&self, resource: T) {
