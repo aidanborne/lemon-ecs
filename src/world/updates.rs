@@ -3,7 +3,10 @@ use std::{
     cell::RefCell,
 };
 
-use crate::component::{changes::ComponentChange, Component};
+use crate::{
+    component::{changes::ComponentChange, Component},
+    storage::sparse_set::SparseSet,
+};
 
 use super::{entities::EntityId, World};
 
@@ -16,27 +19,37 @@ pub enum WorldUpdate {
 }
 
 impl WorldUpdate {
-    pub fn process(self, world: &mut World) {
-        match self {
-            WorldUpdate::SpawnEntity(id, components) => {
-                world
-                    .archetypes
-                    .component_archetype(&components)
-                    .insert(id, components);
-            }
-            WorldUpdate::DespawnEntity(id) => {
-                world.despawn(id);
-            }
-            WorldUpdate::ModifyEntity(id, changes) => {
-                world.modify_entity(id, changes.into_iter());
-            }
-            WorldUpdate::InsertResource(resource) => {
-                let type_id = (*resource.borrow()).type_id();
-                world.resources.insert(type_id, resource);
-            }
-            WorldUpdate::RemoveResource(type_id) => {
-                world.resources.remove(&type_id);
-            }
-        };
+    pub fn process(world: &mut World, updates: Vec<WorldUpdate>) {
+        let mut entities: SparseSet<Vec<ComponentChange>> = SparseSet::new();
+
+        for update in updates {
+            match update {
+                WorldUpdate::SpawnEntity(id, components) => {
+                    world
+                        .archetypes
+                        .component_archetype(&components)
+                        .insert(id, components);
+                }
+                WorldUpdate::DespawnEntity(id) => {
+                    world.despawn(id);
+                    entities.remove(*id);
+                }
+                WorldUpdate::ModifyEntity(id, changes) => {
+                    let vec = entities.get_or_insert_with(*id, Vec::new);
+                    vec.extend(changes.into_iter())
+                }
+                WorldUpdate::InsertResource(resource) => {
+                    let type_id = (*resource.borrow()).type_id();
+                    world.resources.insert(type_id, resource);
+                }
+                WorldUpdate::RemoveResource(type_id) => {
+                    world.resources.remove(&type_id);
+                }
+            };
+        }
+
+        for (id, changes) in entities.into_iter() {
+            world.modify_entity(id.into(), changes.into_iter());
+        }
     }
 }

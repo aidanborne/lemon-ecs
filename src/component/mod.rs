@@ -2,7 +2,7 @@ use std::any::Any;
 
 use crate::storage::{components::ComponentVec, downcast::AsAny};
 
-pub mod bundle;
+pub(crate) mod bundle;
 pub(crate) mod changes;
 
 pub trait Component: AsAny {
@@ -16,5 +16,6 @@ impl<T: Component> AsAny for T {
 }
 
 pub mod prelude {
+    pub(crate) use super::changes::*;
     pub use super::{bundle::*, Component};
 }

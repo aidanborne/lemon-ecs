@@ -90,6 +90,14 @@ impl<T> SparseSet<T> {
         }
     }
 
+    pub fn get_or_insert_with(&mut self, key: usize, f: impl FnOnce() -> T) -> &mut T {
+        if !self.contains(key) {
+            self.insert(key, f());
+        }
+
+        self.get_mut(key).unwrap()
+    }
+
     pub fn iter(&self) -> Iter<'_, T> {
         self.dense.iter()
     }

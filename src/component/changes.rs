@@ -9,20 +9,36 @@ pub enum ComponentChange {
 
 #[derive(Default)]
 pub enum ChangeRecord {
-    Added(Option<Box<dyn Component>>),
+    /// Represents a change in the component.
+    Changed(Box<dyn Component>),
+    /// Represents a removal of the component.
     Removed(Box<dyn Component>),
+    /// Represents an addition of the component.
+    Added,
+    /// Represents no change in the component.
     #[default]
     NoChange,
 }
 
 impl ChangeRecord {
-    pub fn map_added(&mut self, replaced: Option<Box<dyn Component>>) {
+    pub fn map_inserted(&mut self, replaced: Option<Box<dyn Component>>) {
         let old_value = std::mem::take(self);
 
         *self = match old_value {
-            ChangeRecord::NoChange => ChangeRecord::Added(replaced),
-            ChangeRecord::Removed(original) => ChangeRecord::Added(Some(original)),
-            _ => old_value,
+            ChangeRecord::Changed(_) => old_value,
+            ChangeRecord::Removed(original) => {
+                assert!(replaced.is_none(), "Cannot replace a removed component");
+                ChangeRecord::Changed(original)
+            }
+            ChangeRecord::Added => old_value,
+            ChangeRecord::NoChange => {
+                if let Some(original) = replaced {
+                    // Component must have been replaced because it was present
+                    ChangeRecord::Changed(original)
+                } else {
+                    ChangeRecord::Added
+                }
+            }
         }
     }
 
@@ -30,14 +46,19 @@ impl ChangeRecord {
         let old_value = std::mem::take(self);
 
         *self = match old_value {
+            ChangeRecord::Changed(original) => ChangeRecord::Removed(original),
+            ChangeRecord::Removed(_) => old_value,
+            ChangeRecord::Added => ChangeRecord::NoChange,
             ChangeRecord::NoChange => ChangeRecord::Removed(removed),
-            ChangeRecord::Added(original) => ChangeRecord::Removed(original.unwrap_or(removed)),
-            _ => old_value,
         }
     }
 
     pub fn is_added(&self) -> bool {
-        matches!(self, ChangeRecord::Added(_))
+        matches!(self, ChangeRecord::Added)
+    }
+
+    pub fn is_changed(&self) -> bool {
+        matches!(self, ChangeRecord::Changed(_))
     }
 
     pub fn is_removed(&self) -> bool {
@@ -50,8 +71,8 @@ impl ChangeRecord {
 
     pub fn get_removed(&self) -> Option<&dyn Component> {
         match self {
-            ChangeRecord::Added(component) => component.as_ref().map(|component| &**component),
-            ChangeRecord::Removed(component) => Some(&**component),
+            ChangeRecord::Changed(original) => Some(&**original),
+            ChangeRecord::Removed(original) => Some(&**original),
             _ => None,
         }
     }

@@ -1,16 +1,15 @@
-use std::{cell::Cell, ops::Deref};
+use std::ops::Deref;
 
-#[derive(Default)]
 pub struct Entities {
     available_ids: Vec<usize>,
-    next_id: Cell<usize>,
+    next_id: usize,
 }
 
 impl Entities {
     pub fn new() -> Self {
         Self {
             available_ids: Vec::new(),
-            next_id: Cell::new(0),
+            next_id: 0,
         }
     }
 
@@ -18,8 +17,8 @@ impl Entities {
         match self.available_ids.pop() {
             Some(id) => id,
             None => {
-                let id = self.next_id.get();
-                self.next_id.set(id + 1);
+                let id = self.next_id;
+                self.next_id += 1;
                 id
             }
         }
@@ -27,6 +26,12 @@ impl Entities {
 
     pub fn despawn(&mut self, id: usize) {
         self.available_ids.push(id);
+    }
+}
+
+impl Default for Entities {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -5,24 +5,22 @@ use std::{
 };
 
 use crate::{
-    component::{
-        bundle::Bundleable,
-        changes::{ChangeRecord, ComponentChange},
-        Component,
-    },
+    component::{bundle::Bundleable, changes::ComponentChange, Component},
     query::{fetch::QueryFetch, filter::QueryFilter, Query, QueryChanged},
-    storage::{archetypes::Archetypes, sparse_set::SparseSet},
+    storage::archetypes::Archetypes,
     system::resource::{Res, ResMut},
 };
 
 use self::{
+    changes::Changes,
     entities::{Entities, EntityId},
     updates::WorldUpdate,
 };
 
-pub mod buffer;
-pub mod entities;
-pub mod updates;
+pub(crate) mod buffer;
+mod changes;
+pub(crate) mod entities;
+pub(crate) mod updates;
 
 #[derive(Default)]
 pub struct World {
@@ -30,7 +28,7 @@ pub struct World {
     archetypes: Archetypes,
     updates: RefCell<Vec<WorldUpdate>>,
     resources: HashMap<TypeId, Box<RefCell<dyn Any>>>,
-    changes: HashMap<TypeId, SparseSet<ChangeRecord>>,
+    changes: Changes,
 }
 
 impl World {
@@ -66,17 +64,7 @@ impl World {
             .unwrap_or(false)
     }
 
-    fn get_component_record(&mut self, id: EntityId, type_id: TypeId) -> Option<&mut ChangeRecord> {
-        let sparse_set = self.changes.get_mut(&type_id)?;
-        let id = *id;
-
-        if !sparse_set.contains(id) {
-            sparse_set.insert(id, ChangeRecord::NoChange);
-        }
-
-        sparse_set.get_mut(id)
-    }
-
+    #[inline]
     fn modify_bundle<Iter>(&mut self, id: EntityId, bundle: Vec<Box<dyn Component>>, changes: Iter)
     where
         Iter: Iterator<Item = ComponentChange>,
@@ -92,15 +80,15 @@ impl World {
                     let type_id = (*component).as_any().type_id();
                     let removed = components.insert(type_id, component);
 
-                    if let Some(record) = self.get_component_record(id, type_id) {
-                        record.map_added(removed);
+                    if let Some(record) = self.changes.get_record(id, type_id) {
+                        record.map_inserted(removed);
                     }
                 }
                 ComponentChange::Removed(type_id) => {
                     let removed = components.remove(&type_id);
 
                     if let Some(component) = removed {
-                        if let Some(record) = self.get_component_record(id, type_id) {
+                        if let Some(record) = self.changes.get_record(id, type_id) {
                             record.map_removed(component);
                         }
                     }
@@ -136,8 +124,8 @@ impl World {
                         let removed =
                             self.archetypes[archetype_idx].replace_component(id, component);
 
-                        if let Some(record) = self.get_component_record(id, type_id) {
-                            record.map_added(removed);
+                        if let Some(record) = self.changes.get_record(id, type_id) {
+                            record.map_inserted(removed);
                         }
                     } else {
                         consumed = Some(ComponentChange::Added(component));
@@ -184,22 +172,13 @@ impl World {
         Filter: 'static + QueryFilter,
     {
         let archetypes = self.archetypes.query_archetypes::<Fetch, Filter>();
-        Query::new(archetypes)
-    }
-
-    /// Tracks changes to the given component type. This must be called for query_changed to work.
-    pub fn track_changes(&mut self, type_id: TypeId) {
-        self.changes.entry(type_id).or_insert_with(SparseSet::new);
+        Query::new(self, archetypes)
     }
 
     /// Returns a `QueryChanged` iterator for the given component type.
-    /// If the component type is not being tracked, this will return `None`.
-    pub fn query_changed<T: 'static + Component>(&self) -> Option<QueryChanged<T>> {
-        let type_id = TypeId::of::<T>();
-
-        self.changes
-            .get(&type_id)
-            .map(|changes| QueryChanged::new(self, changes.iter()))
+    pub fn query_changed<T: 'static + Component>(&self) -> QueryChanged<T> {
+        let sparse_set = self.changes.get_sparse_set(TypeId::of::<T>());
+        QueryChanged::new(self, sparse_set.iter())
     }
 
     pub fn get_resource<T: 'static>(&self) -> Option<Res<T>> {
@@ -224,13 +203,9 @@ impl World {
     }
 
     pub fn process_updates(&mut self) {
-        for update in self.updates.replace(Vec::new()).into_iter() {
-            update.process(self);
-        }
-
-        for (_type_id, changes) in self.changes.iter_mut() {
-            changes.clear();
-        }
+        let updates = std::mem::take(&mut *self.updates.borrow_mut());
+        WorldUpdate::process(self, updates);
+        self.changes.clear_processed();
     }
 
     pub fn push_update(&self, update: WorldUpdate) {
@@ -239,5 +214,8 @@ impl World {
 }
 
 pub mod prelude {
-    pub use super::{buffer::*, updates::*, World};
+    pub use super::buffer::{EntityBuffer, WorldBuffer};
+    pub use super::entities::EntityId;
+    pub use super::updates::WorldUpdate;
+    pub use super::World;
 }

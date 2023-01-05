@@ -1,5 +1,3 @@
-use std::any::TypeId;
-
 use crate::{
     component::Component,
     query::{fetch::QueryFetch, filter::QueryFilter, Query, QueryChanged},
@@ -27,12 +25,8 @@ impl<Fetch: 'static + QueryFetch, Filter: 'static + QueryFilter> SystemParameter
 impl<T: 'static + Component> SystemParameter for QueryChanged<'_, T> {
     type Result<'world> = QueryChanged<'world, T>;
 
-    fn init(world: &mut World) {
-        world.track_changes(TypeId::of::<T>());
-    }
-
     fn resolve(world: &World) -> Self::Result<'_> {
-        world.query_changed::<T>().unwrap()
+        world.query_changed::<T>()
     }
 }
 

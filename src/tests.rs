@@ -5,7 +5,7 @@ use crate::{
     //prelude::Component,
     query::{filter::Without, Query},
     system::resource::ResMut,
-    world::{buffer::WorldBuffer, entities::EntityId, World},
+    world::{buffer::WorldBuffer, World},
 };
 
 /// Needed to make the macros work
@@ -44,13 +44,13 @@ pub fn world_query_no_filters() {
 
     let _entity = world.spawn(Position(1, 2));
 
-    let mut query = world.query::<Position, ()>();
+    let mut query = world.query::<&Position, ()>();
 
     let position = query.next().unwrap();
     assert_eq!(position, &Position(1, 2), "Position should be (1, 2)");
     assert!(query.next().is_none(), "Query should be empty");
 
-    let mut query = world.query::<(Position, Velocity), ()>();
+    let mut query = world.query::<(&Position, &Velocity), ()>();
     assert!(query.next().is_none(), "Query should be empty");
 }
 
@@ -60,13 +60,13 @@ pub fn world_query_filters() {
 
     let _entity = world.spawn((Position(1, 2), Velocity(3, 4)));
 
-    let mut query = world.query::<Position, ()>();
+    let mut query = world.query::<&Position, ()>();
 
     let position = query.next().unwrap();
     assert_eq!(position, &Position(1, 2), "Position should be (1, 2)");
     assert!(query.next().is_none(), "Query should be empty");
 
-    let mut query = world.query::<Position, Without<Velocity>>();
+    let mut query = world.query::<&Position, Without<Velocity>>();
     assert!(query.next().is_none(), "Query should be empty");
 }
 
@@ -77,14 +77,12 @@ pub fn world_query_changed() {
     let _entity_a = world.spawn(Position(1, 2));
     let entity_b = world.spawn(Position(3, 4));
 
-    world.track_changes(std::any::TypeId::of::<Position>());
+    world.query_changed::<Position>();
 
     world.insert(entity_b, Position(5, 6));
     world.insert(entity_b, Position(7, 8));
 
-    let mut query = world
-        .query_changed::<Position>()
-        .expect("Query should be Some");
+    let mut query = world.query_changed::<Position>();
 
     let record = query.next().unwrap();
 
@@ -96,7 +94,7 @@ pub fn world_query_changed() {
         "Removed Position should be (3, 4)"
     );
     assert_eq!(
-        record.added().unwrap(),
+        record.current().unwrap(),
         &Position(7, 8),
         "Added Position should be (5, 6)"
     );
@@ -112,7 +110,7 @@ pub fn world_multiple_entities() {
 
     let _entity2 = world.spawn(Position(3, 4));
 
-    let mut query = world.query::<Position, ()>();
+    let mut query = world.query::<&Position, ()>();
 
     let position = query.next().unwrap();
     assert_eq!(position, &Position(1, 2), "Position should be (1, 2)");
@@ -126,12 +124,11 @@ pub fn world_multiple_entities() {
 #[derive(Component)]
 struct Name(String);
 
-fn print_system(buffer: WorldBuffer, query: Query<(EntityId, Position, Velocity)>) {
-    for (id, position, velocity) in query {
-        buffer.insert(
-            id,
-            Position(position.0 + velocity.0, position.1 + velocity.1),
-        );
+fn print_system(buffer: WorldBuffer, query: Query<(&mut Position, &Velocity)>) {
+    for (mut position, velocity) in query {
+        let position = &mut *position;
+        position.0 += velocity.0;
+        position.1 += velocity.1;
 
         buffer
             .spawn(Name("Hello".to_string()))
@@ -158,7 +155,7 @@ pub fn engine_run() {
         "Position should be (31, 42)"
     );
 
-    let mut query = engine.query::<(Name, Velocity), ()>();
+    let mut query = engine.query::<(&Name, &Velocity), ()>();
 
     let (name, velocity) = query.next().unwrap();
 

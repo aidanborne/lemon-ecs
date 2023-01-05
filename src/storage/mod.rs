@@ -8,4 +8,5 @@ pub mod prelude {
     pub use super::archetypes::*;
     pub use super::components::*;
     pub use super::entities::*;
+    pub use super::sparse_set::{self, SparseSet};
 }
