@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     component::{
-        bundle::{Bundleable, ComponentBundle},
+        bundle::Bundleable,
         changes::{ChangeRecord, ComponentChange},
         Component,
     },
@@ -43,12 +43,14 @@ impl World {
 
         let bundle = components.bundle();
 
-        self.archetypes.from_components(&bundle).insert(id, bundle);
+        self.archetypes
+            .component_archetype(&bundle)
+            .insert(id, bundle);
         id
     }
 
-    pub fn despawn(&mut self, id: EntityId) -> Option<ComponentBundle> {
-        if let Some(archetype) = self.archetypes.from_entity_mut(id) {
+    pub fn despawn(&mut self, id: EntityId) -> Option<Vec<Box<dyn Component>>> {
+        if let Some(archetype) = self.archetypes.entity_archetype_mut(id) {
             let bundle = archetype.remove(id);
             self.entities.borrow_mut().despawn(*id);
             bundle
@@ -59,7 +61,7 @@ impl World {
 
     pub fn has_component<T: 'static + Component>(&self, id: EntityId) -> bool {
         self.archetypes
-            .from_entity(id)
+            .entity_archetype(id)
             .map(|archetype| archetype.has_component(TypeId::of::<T>()))
             .unwrap_or(false)
     }
@@ -75,7 +77,7 @@ impl World {
         sparse_set.get_mut(id)
     }
 
-    fn modify_bundle<Iter>(&mut self, id: EntityId, bundle: ComponentBundle, changes: Iter)
+    fn modify_bundle<Iter>(&mut self, id: EntityId, bundle: Vec<Box<dyn Component>>, changes: Iter)
     where
         Iter: Iterator<Item = ComponentChange>,
     {
@@ -106,16 +108,15 @@ impl World {
             }
         }
 
-        let bundle: ComponentBundle = components
-            .into_iter()
-            .map(|(_, component)| component)
-            .collect();
+        let components: Vec<_> = components.into_values().collect();
 
-        self.archetypes.from_components(&bundle).insert(id, bundle);
+        self.archetypes
+            .component_archetype(&components)
+            .insert(id, components);
     }
 
     fn modify_entity(&mut self, id: EntityId, mut changes: impl Iterator<Item = ComponentChange>) {
-        let archetype_idx = self.archetypes.from_entity_idx(id);
+        let archetype_idx = self.archetypes.entity_archetype_idx(id);
 
         if archetype_idx.is_none() {
             return;
@@ -126,7 +127,7 @@ impl World {
 
         let mut consumed = None;
 
-        while let Some(change) = changes.next() {
+        for change in changes.by_ref() {
             match change {
                 ComponentChange::Added(component) => {
                     let type_id = (*component).as_any().type_id();
@@ -173,7 +174,7 @@ impl World {
 
     pub fn get_component<T: 'static + Component>(&self, id: EntityId) -> Option<&T> {
         self.archetypes
-            .from_entity(id)
+            .entity_archetype(id)
             .and_then(|archetype| archetype.get_component::<T>(id))
     }
 
@@ -182,7 +183,7 @@ impl World {
         Fetch: 'static + QueryFetch,
         Filter: 'static + QueryFilter,
     {
-        let archetypes = self.archetypes.from_query::<Fetch, Filter>();
+        let archetypes = self.archetypes.query_archetypes::<Fetch, Filter>();
         Query::new(archetypes)
     }
 
@@ -196,11 +197,9 @@ impl World {
     pub fn query_changed<T: 'static + Component>(&self) -> Option<QueryChanged<T>> {
         let type_id = TypeId::of::<T>();
 
-        if let Some(changes) = self.changes.get(&type_id) {
-            Some(QueryChanged::new(&self, changes.iter()))
-        } else {
-            None
-        }
+        self.changes
+            .get(&type_id)
+            .map(|changes| QueryChanged::new(self, changes.iter()))
     }
 
     pub fn get_resource<T: 'static>(&self) -> Option<Res<T>> {
@@ -237,4 +236,8 @@ impl World {
     pub fn push_update(&self, update: WorldUpdate) {
         self.updates.borrow_mut().push(update);
     }
+}
+
+pub mod prelude {
+    pub use super::{buffer::*, updates::*, World};
 }

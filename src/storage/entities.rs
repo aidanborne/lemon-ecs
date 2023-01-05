@@ -1,9 +1,6 @@
 use std::{any::TypeId, collections::HashMap, iter::Enumerate, marker::PhantomData};
 
-use crate::{
-    component::{bundle::ComponentBundle, Component},
-    world::entities::EntityId,
-};
+use crate::{component::Component, world::entities::EntityId};
 
 use super::{components::ComponentVec, sparse_set::SparseSet};
 
@@ -20,16 +17,16 @@ impl EntitySparseSet {
         }
     }
 
-    pub fn from_bundle(bundle: &ComponentBundle) -> Self {
-        let mut components = HashMap::new();
+    pub fn from_components(components: &[Box<dyn Component>]) -> Self {
+        let mut hash_map = HashMap::new();
 
-        for component in bundle.iter() {
-            components.insert(component.as_any().type_id(), component.get_storage());
+        for component in components.iter() {
+            hash_map.insert(component.as_any().type_id(), component.get_storage());
         }
 
         Self {
             entities: SparseSet::new(),
-            components,
+            components: hash_map,
         }
     }
 
@@ -47,7 +44,7 @@ impl EntitySparseSet {
         None
     }
 
-    pub fn insert(&mut self, id: EntityId, components: ComponentBundle) {
+    pub fn insert(&mut self, id: EntityId, components: Vec<Box<dyn Component>>) {
         if !self.entities.contains(*id) {
             self.entities.insert(*id, PhantomData);
         }
@@ -61,16 +58,16 @@ impl EntitySparseSet {
         }
     }
 
-    pub fn remove(&mut self, id: EntityId) -> Option<ComponentBundle> {
+    pub fn remove(&mut self, id: EntityId) -> Option<Vec<Box<dyn Component>>> {
         if let Some(idx) = self.entities.index_of(*id) {
-            let mut bundle = ComponentBundle::new();
+            let mut components = Vec::new();
 
             for (_type_id, storage) in self.components.iter_mut() {
-                bundle.push(storage.swap_remove(idx));
+                components.push(storage.swap_remove(idx));
             }
 
             self.entities.remove(*id);
-            Some(bundle)
+            Some(components)
         } else {
             None
         }
@@ -111,6 +108,12 @@ impl EntitySparseSet {
 
     pub fn iter(&self) -> Iter<'_> {
         Iter::new(self)
+    }
+}
+
+impl Default for EntitySparseSet {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

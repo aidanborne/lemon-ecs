@@ -18,6 +18,10 @@ impl<T> SparseSet<T> {
         self.len
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
     pub fn index_of(&self, key: usize) -> Option<usize> {
         if key >= self.sparse.len() {
             return None;

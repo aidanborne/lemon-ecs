@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    component::bundle::ComponentBundle,
+    component::Component,
     query::{
         fetch::QueryFetch,
         filter::{Filter, FilterKind, QueryFilter},
@@ -26,7 +26,6 @@ struct QueryResult {
     indices: Vec<usize>,
 }
 
-#[derive(Default)]
 pub struct Archetypes {
     archetypes: Vec<EntitySparseSet>,
     bundle_cache: HashMap<Vec<TypeId>, usize>,
@@ -35,29 +34,36 @@ pub struct Archetypes {
 
 impl Archetypes {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            archetypes: Vec::new(),
+            bundle_cache: HashMap::new(),
+            query_cache: RefCell::new(HashMap::new()),
+        }
     }
 
-    pub fn from_entity_idx(&self, id: EntityId) -> Option<ArchetypeIdx> {
+    pub fn entity_archetype_idx(&self, id: EntityId) -> Option<ArchetypeIdx> {
         self.archetypes
             .iter()
             .position(|archetype| archetype.contains(id))
             .map(ArchetypeIdx)
     }
 
-    pub fn from_entity(&self, id: EntityId) -> Option<&EntitySparseSet> {
+    pub fn entity_archetype(&self, id: EntityId) -> Option<&EntitySparseSet> {
         self.archetypes
             .iter()
             .find(|archetype| archetype.contains(id))
     }
 
-    pub fn from_entity_mut(&mut self, id: EntityId) -> Option<&mut EntitySparseSet> {
+    pub fn entity_archetype_mut(&mut self, id: EntityId) -> Option<&mut EntitySparseSet> {
         self.archetypes
             .iter_mut()
             .find(|archetype| archetype.contains(id))
     }
 
-    pub fn from_components(&mut self, components: &ComponentBundle) -> &mut EntitySparseSet {
+    pub fn component_archetype(
+        &mut self,
+        components: &[Box<dyn Component>],
+    ) -> &mut EntitySparseSet {
         let archetype: Vec<TypeId> = components
             .iter()
             .map(|component| component.as_any().type_id())
@@ -69,7 +75,7 @@ impl Archetypes {
             Some(idx) => &mut self.archetypes[*idx],
             None => {
                 let idx = self.archetypes.len();
-                let storage = EntitySparseSet::from_bundle(components);
+                let storage = EntitySparseSet::from_components(components);
 
                 self.archetypes.push(storage);
 
@@ -85,7 +91,7 @@ impl Archetypes {
         }
     }
 
-    pub fn from_query<Fetch, Filter>(&self) -> std::vec::IntoIter<&EntitySparseSet>
+    pub fn query_archetypes<Fetch, Filter>(&self) -> std::vec::IntoIter<&EntitySparseSet>
     where
         Fetch: 'static + QueryFetch,
         Filter: 'static + QueryFilter,
@@ -126,6 +132,12 @@ impl Archetypes {
             .map(|idx| &self.archetypes[*idx])
             .collect::<Vec<_>>()
             .into_iter()
+    }
+}
+
+impl Default for Archetypes {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

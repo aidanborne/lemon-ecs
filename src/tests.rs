@@ -2,6 +2,7 @@ use lemon_ecs_macros::{Bundleable, Component};
 
 use crate::{
     engine::Engine,
+    //prelude::Component,
     query::{filter::Without, Query},
     system::resource::ResMut,
     world::{buffer::WorldBuffer, entities::EntityId, World},

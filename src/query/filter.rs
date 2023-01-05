@@ -8,7 +8,7 @@ pub enum FilterKind {
     Without(TypeId),
 }
 
-pub trait Filter {
+pub(crate) trait Filter {
     fn filter(&self, type_ids: &HashSet<TypeId>) -> bool;
 }
 

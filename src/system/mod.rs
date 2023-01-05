@@ -63,3 +63,7 @@ macro_rules! impl_system_fn {
 }
 
 all_tuples!(impl_system_fn, 0..16);
+
+pub mod prelude {
+    pub use super::{params::SystemParameter, resource::*, System};
+}

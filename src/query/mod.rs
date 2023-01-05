@@ -130,3 +130,7 @@ impl<'world, T: Component> Iterator for QueryChanged<'world, T> {
             .map(|(id, record)| EntityChange::new(self.world, (*id).into(), record))
     }
 }
+
+pub mod prelude {
+    pub use super::{fetch::QueryFetch, filter::QueryFilter, Query, QueryChanged};
+}

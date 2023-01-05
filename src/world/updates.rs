@@ -3,12 +3,12 @@ use std::{
     cell::RefCell,
 };
 
-use crate::component::{bundle::ComponentBundle, changes::ComponentChange};
+use crate::component::{changes::ComponentChange, Component};
 
 use super::{entities::EntityId, World};
 
 pub enum WorldUpdate {
-    SpawnEntity(EntityId, ComponentBundle),
+    SpawnEntity(EntityId, Vec<Box<dyn Component>>),
     DespawnEntity(EntityId),
     ModifyEntity(EntityId, Vec<ComponentChange>),
     InsertResource(Box<RefCell<dyn Any>>),
@@ -21,7 +21,7 @@ impl WorldUpdate {
             WorldUpdate::SpawnEntity(id, components) => {
                 world
                     .archetypes
-                    .from_components(&components)
+                    .component_archetype(&components)
                     .insert(id, components);
             }
             WorldUpdate::DespawnEntity(id) => {

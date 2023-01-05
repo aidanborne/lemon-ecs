@@ -145,8 +145,8 @@ fn derive_into_bundle_helper<T: ToTokens>(
         where
             #(#types: 'static + lemon_ecs::component::bundle::Bundleable),*
         {
-            fn bundle(self) -> lemon_ecs::component::bundle::ComponentBundle {
-                let mut bundle: lemon_ecs::component::bundle::ComponentBundle = vec![];
+            fn bundle(self) -> Vec<Box<dyn lemon_ecs::component::Component>> {
+                let mut bundle: Vec<Box<dyn lemon_ecs::component::Component>> = vec![];
                 #(
                     bundle.push(Box::new(self.#components));
                 )*

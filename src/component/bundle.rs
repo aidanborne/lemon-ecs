@@ -2,23 +2,21 @@ use lemon_ecs_macros::impl_tuple_bundle;
 
 use super::Component;
 
-pub type ComponentBundle = Vec<Box<dyn Component>>;
-
 pub trait Bundleable {
-    fn bundle(self) -> ComponentBundle;
+    fn bundle(self) -> Vec<Box<dyn Component>>;
 }
 
 impl<T> Bundleable for T
 where
     T: 'static + Component,
 {
-    fn bundle(self) -> ComponentBundle {
+    fn bundle(self) -> Vec<Box<dyn Component>> {
         vec![Box::new(self)]
     }
 }
 
-impl Bundleable for ComponentBundle {
-    fn bundle(self) -> ComponentBundle {
+impl Bundleable for Vec<Box<dyn Component>> {
+    fn bundle(self) -> Vec<Box<dyn Component>> {
         self
     }
 }

@@ -48,10 +48,10 @@ impl ChangeRecord {
         matches!(self, ChangeRecord::NoChange)
     }
 
-    pub fn get_removed(&self) -> Option<&Box<dyn Component>> {
+    pub fn get_removed(&self) -> Option<&dyn Component> {
         match self {
-            ChangeRecord::Added(component) => component.as_ref(),
-            ChangeRecord::Removed(component) => Some(component),
+            ChangeRecord::Added(component) => component.as_ref().map(|component| &**component),
+            ChangeRecord::Removed(component) => Some(&**component),
             _ => None,
         }
     }

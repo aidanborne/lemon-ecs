@@ -33,6 +33,12 @@ impl Engine {
     }
 }
 
+impl Default for Engine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Deref for Engine {
     type Target = World;
 

@@ -82,10 +82,7 @@ impl<'world> EntityBuffer<'world> {
     where
         Iter: IntoIterator<Item = TypeId>,
     {
-        let types = types
-            .into_iter()
-            .map(|type_id| ComponentChange::Removed(type_id))
-            .collect();
+        let types = types.into_iter().map(ComponentChange::Removed).collect();
 
         self.world
             .push_update(WorldUpdate::ModifyEntity(self.id, types));

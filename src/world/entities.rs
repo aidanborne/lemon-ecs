@@ -15,15 +15,14 @@ impl Entities {
     }
 
     pub fn spawn(&mut self) -> usize {
-        let id = match self.available_ids.pop() {
+        match self.available_ids.pop() {
             Some(id) => id,
             None => {
                 let id = self.next_id.get();
                 self.next_id.set(id + 1);
                 id
             }
-        };
-        id
+        }
     }
 
     pub fn despawn(&mut self, id: usize) {

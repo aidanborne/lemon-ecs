@@ -22,7 +22,7 @@ impl<T> Deref for Res<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &*self.value
+        &self.value
     }
 }
 
@@ -57,13 +57,13 @@ impl<T> Deref for ResMut<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &*self.value
+        &self.value
     }
 }
 
 impl<T> DerefMut for ResMut<'_, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut *self.value
+        &mut self.value
     }
 }
 
