@@ -8,37 +8,51 @@ pub enum ComponentChange {
 }
 
 #[derive(Default)]
-pub struct ChangeRecord {
-    added: bool,
-    removed: Option<Box<dyn Component>>,
+pub enum ChangeRecord {
+    Added(Option<Box<dyn Component>>),
+    Removed(Box<dyn Component>),
+    #[default]
+    NoChange,
 }
 
 impl ChangeRecord {
-    pub fn new() -> Self {
-        Self::default()
-    }
+    pub fn map_added(&mut self, replaced: Option<Box<dyn Component>>) {
+        let old_value = std::mem::take(self);
 
-    pub fn added(&mut self, removed: Option<Box<dyn Component>>) {
-        self.added = true;
-
-        if self.removed.is_none() {
-            self.removed = removed;
+        *self = match old_value {
+            ChangeRecord::NoChange => ChangeRecord::Added(replaced),
+            ChangeRecord::Removed(original) => ChangeRecord::Added(Some(original)),
+            _ => old_value,
         }
     }
 
-    pub fn was_added(&self) -> bool {
-        self.added
+    pub fn map_removed(&mut self, removed: Box<dyn Component>) {
+        let old_value = std::mem::take(self);
+
+        *self = match old_value {
+            ChangeRecord::NoChange => ChangeRecord::Removed(removed),
+            ChangeRecord::Added(original) => ChangeRecord::Removed(original.unwrap_or(removed)),
+            _ => old_value,
+        }
     }
 
-    pub fn removed(&mut self, removed: Box<dyn Component>) {
-        self.added = false;
+    pub fn is_added(&self) -> bool {
+        matches!(self, ChangeRecord::Added(_))
+    }
 
-        if self.removed.is_none() {
-            self.removed = Some(removed);
-        }
+    pub fn is_removed(&self) -> bool {
+        matches!(self, ChangeRecord::Removed(_))
+    }
+
+    pub fn is_no_change(&self) -> bool {
+        matches!(self, ChangeRecord::NoChange)
     }
 
     pub fn get_removed(&self) -> Option<&Box<dyn Component>> {
-        self.removed.as_ref()
+        match self {
+            ChangeRecord::Added(component) => component.as_ref(),
+            ChangeRecord::Removed(component) => Some(component),
+            _ => None,
+        }
     }
 }

@@ -12,17 +12,21 @@ use crate::{
     },
     query::{fetch::QueryFetch, filter::QueryFilter, Query, QueryChanged},
     storage::{archetypes::Archetypes, sparse_set::SparseSet},
-    system::resource::{Resource, ResourceMut},
+    system::resource::{Res, ResMut},
 };
 
-use self::{entities::EntityId, updates::WorldUpdate};
+use self::{
+    entities::{Entities, EntityId},
+    updates::WorldUpdate,
+};
 
+pub mod buffer;
 pub mod entities;
 pub mod updates;
 
 #[derive(Default)]
 pub struct World {
-    entities: entities::Entities,
+    entities: RefCell<Entities>,
     archetypes: Archetypes,
     updates: RefCell<Vec<WorldUpdate>>,
     resources: HashMap<TypeId, Box<RefCell<dyn Any>>>,
@@ -35,20 +39,18 @@ impl World {
     }
 
     pub fn spawn(&mut self, components: impl Bundleable) -> EntityId {
-        let id = self.entities.spawn().into();
+        let id = self.entities.borrow_mut().spawn().into();
 
         let bundle = components.bundle();
 
-        let archetype = self.archetypes.get_bundle_archetype(&bundle);
-        self.archetypes[archetype].insert(id, bundle);
-
+        self.archetypes.from_components(&bundle).insert(id, bundle);
         id
     }
 
     pub fn despawn(&mut self, id: EntityId) -> Option<ComponentBundle> {
-        if let Some(idx) = self.archetypes.get_entity_archetype(id) {
-            let bundle = self.archetypes[idx].remove(id);
-            self.entities.despawn(*id);
+        if let Some(archetype) = self.archetypes.from_entity_mut(id) {
+            let bundle = archetype.remove(id);
+            self.entities.borrow_mut().despawn(*id);
             bundle
         } else {
             None
@@ -57,11 +59,8 @@ impl World {
 
     pub fn has_component<T: 'static + Component>(&self, id: EntityId) -> bool {
         self.archetypes
-            .get_entity_archetype(id)
-            .map(|idx| {
-                self.archetypes[idx].contains(id)
-                    && self.archetypes[idx].has_component(TypeId::of::<T>())
-            })
+            .from_entity(id)
+            .map(|archetype| archetype.has_component(TypeId::of::<T>()))
             .unwrap_or(false)
     }
 
@@ -70,7 +69,7 @@ impl World {
         let id = *id;
 
         if !sparse_set.contains(id) {
-            sparse_set.insert(id, ChangeRecord::new());
+            sparse_set.insert(id, ChangeRecord::NoChange);
         }
 
         sparse_set.get_mut(id)
@@ -92,7 +91,7 @@ impl World {
                     let removed = components.insert(type_id, component);
 
                     if let Some(record) = self.get_component_record(id, type_id) {
-                        record.added(removed);
+                        record.map_added(removed);
                     }
                 }
                 ComponentChange::Removed(type_id) => {
@@ -100,7 +99,7 @@ impl World {
 
                     if let Some(component) = removed {
                         if let Some(record) = self.get_component_record(id, type_id) {
-                            record.removed(component);
+                            record.map_removed(component);
                         }
                     }
                 }
@@ -112,21 +111,20 @@ impl World {
             .map(|(_, component)| component)
             .collect();
 
-        let archetype_id = self.archetypes.get_bundle_archetype(&bundle);
-        self.archetypes[archetype_id].insert(id, bundle);
+        self.archetypes.from_components(&bundle).insert(id, bundle);
     }
 
     fn modify_entity(&mut self, id: EntityId, mut changes: impl Iterator<Item = ComponentChange>) {
-        let curr_idx = self.archetypes.get_entity_archetype(id);
+        let archetype_idx = self.archetypes.from_entity_idx(id);
 
-        if curr_idx.is_none() {
+        if archetype_idx.is_none() {
             return;
         }
 
-        let curr_idx = curr_idx.unwrap();
-        let hash_set: HashSet<TypeId> = self.archetypes[curr_idx].type_ids();
+        let archetype_idx = archetype_idx.unwrap();
+        let hash_set: HashSet<TypeId> = self.archetypes[archetype_idx].type_ids();
 
-        let mut breaking_change = None;
+        let mut consumed = None;
 
         while let Some(change) = changes.next() {
             match change {
@@ -134,28 +132,29 @@ impl World {
                     let type_id = (*component).as_any().type_id();
 
                     if hash_set.contains(&type_id) {
-                        let removed = self.archetypes[curr_idx].replace_component(id, component);
+                        let removed =
+                            self.archetypes[archetype_idx].replace_component(id, component);
 
                         if let Some(record) = self.get_component_record(id, type_id) {
-                            record.added(removed);
+                            record.map_added(removed);
                         }
                     } else {
-                        breaking_change = Some(ComponentChange::Added(component));
+                        consumed = Some(ComponentChange::Added(component));
                         break;
                     }
                 }
                 ComponentChange::Removed(type_id) => {
                     if hash_set.contains(&type_id) {
-                        breaking_change = Some(change);
+                        consumed = Some(change);
                         break;
                     }
                 }
             }
         }
 
-        if let Some(breaking_change) = breaking_change {
-            let bundle = self.archetypes[curr_idx].remove(id).unwrap();
-            self.modify_bundle(id, bundle, std::iter::once(breaking_change).chain(changes));
+        if let Some(consumed) = consumed {
+            let bundle = self.archetypes[archetype_idx].remove(id).unwrap();
+            self.modify_bundle(id, bundle, std::iter::once(consumed).chain(changes));
         }
     }
 
@@ -174,8 +173,8 @@ impl World {
 
     pub fn get_component<T: 'static + Component>(&self, id: EntityId) -> Option<&T> {
         self.archetypes
-            .get_entity_archetype(id)
-            .and_then(|idx| self.archetypes[idx].get_component::<T>(id))
+            .from_entity(id)
+            .and_then(|archetype| archetype.get_component::<T>(id))
     }
 
     pub fn query<Fetch, Filter>(&self) -> Query<Fetch, Filter>
@@ -183,7 +182,7 @@ impl World {
         Fetch: 'static + QueryFetch,
         Filter: 'static + QueryFilter,
     {
-        let archetypes = self.archetypes.get_query_archetypes::<Fetch, Filter>();
+        let archetypes = self.archetypes.from_query::<Fetch, Filter>();
         Query::new(archetypes)
     }
 
@@ -204,16 +203,16 @@ impl World {
         }
     }
 
-    pub fn get_resource<T: 'static>(&self) -> Option<Resource<T>> {
+    pub fn get_resource<T: 'static>(&self) -> Option<Res<T>> {
         let cell = &**self.resources.get(&TypeId::of::<T>())?;
         let ref_value = Ref::map(cell.borrow(), |r| r.downcast_ref::<T>().unwrap());
-        Some(Resource::new(ref_value))
+        Some(Res::new(ref_value))
     }
 
-    pub fn get_resource_mut<T: 'static>(&self) -> Option<ResourceMut<T>> {
+    pub fn get_resource_mut<T: 'static>(&self) -> Option<ResMut<T>> {
         let cell = &**self.resources.get(&TypeId::of::<T>())?;
         let ref_value = RefMut::map(cell.borrow_mut(), |r| r.downcast_mut::<T>().unwrap());
-        Some(ResourceMut::new(ref_value))
+        Some(ResMut::new(ref_value))
     }
 
     pub fn insert_resource<T: 'static>(&mut self, resource: T) {

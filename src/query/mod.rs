@@ -87,7 +87,7 @@ impl<'world, T: Component> EntityChange<'world, T> {
     }
 
     pub fn added(&self) -> Option<&'world T> {
-        if self.record.was_added() {
+        if self.record.is_added() {
             self.world.get_component(self.id)
         } else {
             None

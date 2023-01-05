@@ -3,8 +3,8 @@ use lemon_ecs_macros::{Bundleable, Component};
 use crate::{
     engine::Engine,
     query::{filter::Without, Query},
-    system::{buffer::SystemBuffer, resource::ResourceMut},
-    world::{entities::EntityId, World},
+    system::resource::ResMut,
+    world::{buffer::WorldBuffer, entities::EntityId, World},
 };
 
 /// Needed to make the macros work
@@ -122,12 +122,19 @@ pub fn world_multiple_entities() {
     assert!(query.next().is_none(), "Query should be empty");
 }
 
-fn print_system(buffer: SystemBuffer, query: Query<(EntityId, Position, Velocity)>) {
+#[derive(Component)]
+struct Name(String);
+
+fn print_system(buffer: WorldBuffer, query: Query<(EntityId, Position, Velocity)>) {
     for (id, position, velocity) in query {
         buffer.insert(
             id,
             Position(position.0 + velocity.0, position.1 + velocity.1),
         );
+
+        buffer
+            .spawn(Name("Hello".to_string()))
+            .insert(Velocity(3, 4));
     }
 }
 
@@ -145,10 +152,17 @@ pub fn engine_run() {
     let position = engine.get_component::<Position>(entity);
 
     assert_eq!(
-        position,
-        Some(&Position(31, 42)),
+        position.unwrap(),
+        &Position(31, 42),
         "Position should be (31, 42)"
     );
+
+    let mut query = engine.query::<(Name, Velocity), ()>();
+
+    let (name, velocity) = query.next().unwrap();
+
+    assert_eq!(name.0, "Hello", "Name should be 'Hello'");
+    assert_eq!(velocity, &Velocity(3, 4), "Velocity should be (3, 4)");
 }
 
 struct Counter {
@@ -165,7 +179,7 @@ impl Counter {
     }
 }
 
-fn counter_system(mut counter: ResourceMut<Counter>) {
+fn counter_system(mut counter: ResMut<Counter>) {
     counter.increment();
 }
 

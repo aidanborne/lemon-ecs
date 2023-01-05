@@ -6,7 +6,6 @@ use crate::world::World;
 
 use self::params::SystemParameter;
 
-pub mod buffer;
 pub mod params;
 pub mod resource;
 

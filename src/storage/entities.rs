@@ -105,7 +105,7 @@ impl EntitySparseSet {
         None
     }
 
-    pub fn type_ids<T: FromIterator<TypeId>>(&self) -> T {
+    pub fn type_ids(&self) -> std::collections::HashSet<TypeId> {
         self.components.keys().cloned().collect()
     }
 

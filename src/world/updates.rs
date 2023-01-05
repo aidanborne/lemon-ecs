@@ -8,7 +8,7 @@ use crate::component::{bundle::ComponentBundle, changes::ComponentChange};
 use super::{entities::EntityId, World};
 
 pub enum WorldUpdate {
-    SpawnEntity(ComponentBundle),
+    SpawnEntity(EntityId, ComponentBundle),
     DespawnEntity(EntityId),
     ModifyEntity(EntityId, Vec<ComponentChange>),
     InsertResource(Box<RefCell<dyn Any>>),
@@ -18,8 +18,11 @@ pub enum WorldUpdate {
 impl WorldUpdate {
     pub fn process(self, world: &mut World) {
         match self {
-            WorldUpdate::SpawnEntity(bundle) => {
-                world.spawn(bundle);
+            WorldUpdate::SpawnEntity(id, components) => {
+                world
+                    .archetypes
+                    .from_components(&components)
+                    .insert(id, components);
             }
             WorldUpdate::DespawnEntity(id) => {
                 world.despawn(id);

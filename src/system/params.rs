@@ -3,7 +3,7 @@ use std::any::TypeId;
 use crate::{
     component::Component,
     query::{fetch::QueryFetch, filter::QueryFilter, Query, QueryChanged},
-    world::World,
+    world::{buffer::WorldBuffer, World},
 };
 
 pub trait SystemParameter {
@@ -41,5 +41,13 @@ impl SystemParameter for &'_ World {
 
     fn resolve(world: &World) -> Self::Result<'_> {
         world
+    }
+}
+
+impl SystemParameter for WorldBuffer<'_> {
+    type Result<'world> = WorldBuffer<'world>;
+
+    fn resolve(world: &World) -> Self::Result<'_> {
+        WorldBuffer::new(world)
     }
 }
