@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-pub struct Entities {
+pub(crate) struct Entities {
     available_ids: Vec<usize>,
     next_id: usize,
 }

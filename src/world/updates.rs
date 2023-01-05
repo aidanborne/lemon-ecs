@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    component::{changes::ComponentChange, Component},
+    component::{Component, ComponentChange},
     storage::sparse_set::SparseSet,
 };
 

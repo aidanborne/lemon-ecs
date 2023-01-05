@@ -4,10 +4,11 @@ use lemon_ecs_macros::all_tuples;
 
 use crate::world::World;
 
-use self::params::SystemParameter;
+mod params;
+mod resource;
 
-pub mod params;
-pub mod resource;
+pub use params::SystemParameter;
+pub use resource::*;
 
 pub trait System {
     fn update(&self, world: &World);

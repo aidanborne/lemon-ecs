@@ -3,62 +3,50 @@ use std::{any::TypeId, collections::HashSet, marker::PhantomData};
 use lemon_ecs_macros::all_tuples;
 
 #[derive(PartialEq, Eq, Hash)]
-pub enum FilterKind {
+pub enum Filter {
     With(TypeId),
     Without(TypeId),
 }
 
-pub(crate) trait Filter {
-    fn filter(&self, type_ids: &HashSet<TypeId>) -> bool;
-}
-
-impl Filter for FilterKind {
-    fn filter(&self, type_ids: &HashSet<TypeId>) -> bool {
+impl Filter {
+    pub fn filter(&self, type_ids: &HashSet<TypeId>) -> bool {
         match self {
-            FilterKind::With(type_id) => type_ids.contains(type_id),
-            FilterKind::Without(type_id) => !type_ids.contains(type_id),
+            Filter::With(type_id) => type_ids.contains(type_id),
+            Filter::Without(type_id) => !type_ids.contains(type_id),
         }
     }
-}
 
-impl Filter for Vec<FilterKind> {
-    fn filter(&self, type_ids: &HashSet<TypeId>) -> bool {
-        for filter in self.iter() {
-            if !filter.filter(type_ids) {
-                return false;
-            }
-        }
-
-        true
+    pub fn filter_all(filters: &[Filter], type_ids: &HashSet<TypeId>) -> bool {
+        filters.iter().all(|filter| filter.filter(type_ids))
     }
 }
 
 trait Filterable {
-    fn get_filter() -> FilterKind;
+    fn get_filter() -> Filter;
 }
 
 pub struct With<T>(PhantomData<T>);
 
 impl<T: 'static> Filterable for With<T> {
-    fn get_filter() -> FilterKind {
-        FilterKind::With(TypeId::of::<T>())
+    fn get_filter() -> Filter {
+        Filter::With(TypeId::of::<T>())
     }
 }
 
 pub struct Without<T>(PhantomData<T>);
 
 impl<T: 'static> Filterable for Without<T> {
-    fn get_filter() -> FilterKind {
-        FilterKind::Without(TypeId::of::<T>())
+    fn get_filter() -> Filter {
+        Filter::Without(TypeId::of::<T>())
     }
 }
 
 pub trait QueryFilter {
-    fn get_filters() -> Vec<FilterKind>;
+    fn get_filters() -> Vec<Filter>;
 }
 
 impl<T: Filterable> QueryFilter for T {
-    fn get_filters() -> Vec<FilterKind> {
+    fn get_filters() -> Vec<Filter> {
         vec![T::get_filter()]
     }
 }
@@ -66,7 +54,7 @@ impl<T: Filterable> QueryFilter for T {
 macro_rules! impl_query_filter {
   ($($t:ident),*) => {
       impl<$($t: Filterable),*> QueryFilter for ($($t,)*) {
-          fn get_filters() -> Vec<FilterKind> {
+          fn get_filters() -> Vec<Filter> {
               vec![$($t::get_filter()),*]
           }
       }

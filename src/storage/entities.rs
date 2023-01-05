@@ -1,6 +1,6 @@
 use std::{any::TypeId, collections::HashMap, iter::Enumerate, marker::PhantomData};
 
-use crate::{component::Component, world::entities::EntityId};
+use crate::{component::Component, world::EntityId};
 
 use super::{components::ComponentVec, sparse_set::SparseSet};
 

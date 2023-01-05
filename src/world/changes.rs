@@ -1,6 +1,8 @@
 use std::{any::TypeId, cell::RefCell, collections::HashMap};
 
-use crate::prelude::{ChangeRecord, EntityId, SparseSet};
+use crate::{component::ChangeRecord, storage::sparse_set::SparseSet};
+
+use super::EntityId;
 
 #[derive(PartialEq)]
 enum ChangeStatus {
@@ -8,7 +10,7 @@ enum ChangeStatus {
     Unprocessed,
 }
 
-pub struct Changes {
+pub(crate) struct Changes {
     empty_sparse_set: SparseSet<ChangeRecord>,
     tracked_changes: RefCell<HashMap<TypeId, ChangeStatus>>,
     changes: HashMap<TypeId, SparseSet<ChangeRecord>>,

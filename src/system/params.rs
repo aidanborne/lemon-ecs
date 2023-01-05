@@ -1,7 +1,7 @@
 use crate::{
     component::Component,
-    query::{fetch::QueryFetch, filter::QueryFilter, Query, QueryChanged},
-    world::{buffer::WorldBuffer, World},
+    query::{Query, QueryChanged, QueryFetch, QueryFilter},
+    world::{World, WorldBuffer},
 };
 
 pub trait SystemParameter {

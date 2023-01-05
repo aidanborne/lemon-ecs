@@ -2,10 +2,9 @@ use lemon_ecs_macros::{Bundleable, Component};
 
 use crate::{
     engine::Engine,
-    //prelude::Component,
-    query::{filter::Without, Query},
-    system::resource::ResMut,
-    world::{buffer::WorldBuffer, World},
+    query::{Query, Without},
+    system::ResMut,
+    world::{World, WorldBuffer},
 };
 
 /// Needed to make the macros work

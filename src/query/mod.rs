@@ -1,21 +1,20 @@
 use std::marker::PhantomData;
 
 use crate::{
-    component::{changes::ChangeRecord, Component},
+    component::{ChangeRecord, Component},
     storage::{
         entities::{self, EntitySparseSet},
         sparse_set,
     },
-    world::{entities::EntityId, World},
+    world::{EntityId, World},
 };
 
-use self::{
-    fetch::QueryFetch,
-    filter::{FilterKind, QueryFilter},
-};
+mod fetch;
+mod filter;
 
-pub mod fetch;
-pub mod filter;
+pub use fetch::QueryFetch;
+pub(crate) use filter::{Filter, QueryFilter};
+pub use filter::{With, Without};
 
 pub struct Query<'world, Fetch: QueryFetch, Filter: QueryFilter = ()> {
     world: &'world World,
@@ -57,10 +56,10 @@ impl<'world, Fetch: QueryFetch, Filter: QueryFilter> Query<'world, Fetch, Filter
         }
     }
 
-    pub fn get_filters() -> Vec<FilterKind> {
+    pub fn get_filters() -> Vec<filter::Filter> {
         Fetch::type_ids()
             .into_iter()
-            .map(FilterKind::With)
+            .map(filter::Filter::With)
             .chain(Filter::get_filters().into_iter())
             .collect()
     }
@@ -160,8 +159,4 @@ impl<'world, T: Component> Iterator for QueryChanged<'world, T> {
             }
         }
     }
-}
-
-pub mod prelude {
-    pub use super::{fetch::*, filter::*, Query, QueryChanged};
 }

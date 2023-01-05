@@ -7,26 +7,21 @@ use std::{
 
 use crate::{
     component::Component,
-    query::{
-        fetch::QueryFetch,
-        filter::{Filter, FilterKind, QueryFilter},
-        Query,
-    },
-    world::entities::EntityId,
+    query::{self, Filter, Query, QueryFetch, QueryFilter},
+    storage::entities::EntitySparseSet,
+    world::EntityId,
 };
-
-use super::entities::EntitySparseSet;
 
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct ArchetypeIdx(usize);
+pub(crate) struct ArchetypeIdx(usize);
 
 struct QueryResult {
-    filter_kinds: Vec<FilterKind>,
+    filters: Vec<Filter>,
     indices: Vec<usize>,
 }
 
-pub struct Archetypes {
+pub(crate) struct Archetypes {
     archetypes: Vec<EntitySparseSet>,
     bundle_cache: HashMap<Vec<TypeId>, usize>,
     query_cache: RefCell<HashMap<TypeId, QueryResult>>,
@@ -80,7 +75,7 @@ impl Archetypes {
                 self.archetypes.push(storage);
 
                 for (_type_id, cache) in self.query_cache.borrow_mut().iter_mut() {
-                    if cache.filter_kinds.filter(&hash_set) {
+                    if Filter::filter_all(&cache.filters, &hash_set) {
                         cache.indices.push(idx);
                     }
                 }
@@ -109,7 +104,7 @@ impl Archetypes {
                     .iter()
                     .enumerate()
                     .filter_map(|(idx, archetype)| {
-                        if filter_kinds.filter(&archetype.type_ids()) {
+                        if query::Filter::filter_all(&filter_kinds, &archetype.type_ids()) {
                             Some(idx)
                         } else {
                             None
@@ -118,7 +113,7 @@ impl Archetypes {
                     .collect();
 
                 let result = QueryResult {
-                    filter_kinds,
+                    filters: filter_kinds,
                     indices,
                 };
 

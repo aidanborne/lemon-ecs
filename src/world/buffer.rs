@@ -1,8 +1,8 @@
 use std::{any::TypeId, cell::RefCell};
 
 use crate::{
-    component::{bundle::Bundleable, changes::ComponentChange},
-    world::{entities::EntityId, updates::WorldUpdate, World},
+    component::{Bundleable, ComponentChange},
+    world::{EntityId, World, WorldUpdate},
 };
 
 pub struct WorldBuffer<'world> {

@@ -6,7 +6,11 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use crate::prelude::{Component, ComponentChange, Entity, EntityId, World, WorldUpdate};
+use crate::{
+    component::{Component, ComponentChange},
+    storage::entities::Entity,
+    world::{EntityId, World, WorldUpdate},
+};
 
 pub trait QueryFetch {
     type Result<'world>;

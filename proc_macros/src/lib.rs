@@ -13,9 +13,9 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
     let ident = input.ident;
 
     let gen = quote! {
-        impl #generics lemon_ecs::prelude::Component for #ident #generics {
+        impl #generics lemon_ecs::component::Component for #ident #generics {
             #[inline]
-            fn get_storage(&self) -> Box<dyn lemon_ecs::prelude::ComponentVec> {
+            fn get_storage(&self) -> Box<dyn lemon_ecs::storage::ComponentVec> {
                 Box::new(Vec::<#ident #generics>::new())
             }
         }
@@ -141,12 +141,12 @@ fn impl_into_bundle<T: ToTokens>(
     }
 
     let gen = quote! {
-        impl #generics lemon_ecs::prelude::Bundleable for #ident #generics
+        impl #generics lemon_ecs::component::Bundleable for #ident #generics
         where
-            #(#types: 'static + lemon_ecs::prelude::Bundleable),*
+            #(#types: 'static + lemon_ecs::component::Bundleable),*
         {
-            fn bundle(self) -> Vec<Box<dyn lemon_ecs::prelude::Component>> {
-                let mut bundle: Vec<Box<dyn lemon_ecs::prelude::Component>> = vec![#(Box::new(self.#components)),*];
+            fn bundle(self) -> Vec<Box<dyn lemon_ecs::component::Component>> {
+                let mut bundle: Vec<Box<dyn lemon_ecs::component::Component>> = vec![#(Box::new(self.#components)),*];
                 #(
                     bundle.extend(self.#bundles.into());
                 )*

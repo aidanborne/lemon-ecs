@@ -5,22 +5,23 @@ use std::{
 };
 
 use crate::{
-    component::{bundle::Bundleable, changes::ComponentChange, Component},
-    query::{fetch::QueryFetch, filter::QueryFilter, Query, QueryChanged},
+    component::{Bundleable, Component, ComponentChange},
+    query::{Query, QueryChanged, QueryFetch, QueryFilter},
     storage::archetypes::Archetypes,
-    system::resource::{Res, ResMut},
+    system::{Res, ResMut},
 };
 
-use self::{
-    changes::Changes,
-    entities::{Entities, EntityId},
-    updates::WorldUpdate,
-};
-
-pub(crate) mod buffer;
+mod buffer;
 mod changes;
-pub(crate) mod entities;
-pub(crate) mod updates;
+mod entities;
+mod updates;
+
+pub use buffer::*;
+pub use entities::EntityId;
+pub(crate) use updates::WorldUpdate;
+
+use changes::Changes;
+use entities::Entities;
 
 #[derive(Default)]
 pub struct World {
@@ -211,11 +212,4 @@ impl World {
     pub fn push_update(&self, update: WorldUpdate) {
         self.updates.borrow_mut().push(update);
     }
-}
-
-pub mod prelude {
-    pub use super::buffer::{EntityBuffer, WorldBuffer};
-    pub use super::entities::EntityId;
-    pub use super::updates::WorldUpdate;
-    pub use super::World;
 }
