@@ -15,7 +15,7 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
     let gen = quote! {
         impl #generics lemon_ecs::component::Component for #ident #generics {
             #[inline]
-            fn get_storage(&self) -> Box<dyn lemon_ecs::storage::ComponentVec> {
+            fn get_storage(&self) -> Box<dyn lemon_ecs::collections::ComponentVec> {
                 Box::new(Vec::<#ident #generics>::new())
             }
         }

@@ -7,8 +7,8 @@ use std::{
 };
 
 use crate::{
+    collections::entity_sparse_set::Entity,
     component::{Component, ComponentChange},
-    storage::entities::Entity,
     world::{EntityId, World, WorldUpdate},
 };
 

@@ -2,7 +2,7 @@ use std::{any::TypeId, collections::HashMap, iter::Enumerate, marker::PhantomDat
 
 use crate::{component::Component, world::EntityId};
 
-use super::{components::ComponentVec, sparse_set::SparseSet};
+use super::{sparse_set::SparseSet, ComponentVec};
 
 pub struct EntitySparseSet {
     entities: SparseSet<PhantomData<bool>>,
@@ -37,7 +37,7 @@ impl EntitySparseSet {
     ) -> Option<Box<dyn Component>> {
         if let Some(idx) = self.entities.index_of(*id) {
             if let Some(storage) = self.components.get_mut(&component.as_any().type_id()) {
-                return storage.replace_index(idx, component);
+                return storage.swap_replace(idx, component);
             }
         }
 
@@ -53,7 +53,7 @@ impl EntitySparseSet {
 
         for component in components {
             if let Some(storage) = self.components.get_mut(&component.as_any().type_id()) {
-                storage.replace_index(dense_idx, component);
+                storage.swap_replace(dense_idx, component);
             }
         }
     }

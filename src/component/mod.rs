@@ -1,6 +1,6 @@
 use std::any::Any;
 
-use crate::storage::{downcast::AsAny, ComponentVec};
+use crate::{collections::ComponentVec, traits::AsAny};
 
 mod bundle;
 mod changes;

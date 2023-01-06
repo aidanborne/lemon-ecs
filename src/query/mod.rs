@@ -1,11 +1,8 @@
 use std::marker::PhantomData;
 
 use crate::{
+    collections::{entity_sparse_set, sparse_set, EntitySparseSet},
     component::{ChangeRecord, Component},
-    storage::{
-        entities::{self, EntitySparseSet},
-        sparse_set,
-    },
     world::{EntityId, World},
 };
 
@@ -19,7 +16,7 @@ pub use filter::{With, Without};
 pub struct Query<'world, Fetch: QueryFetch, Filter: QueryFilter = ()> {
     world: &'world World,
     archetypes: std::vec::IntoIter<&'world EntitySparseSet>,
-    entities: Option<entities::Iter<'world>>,
+    entities: Option<entity_sparse_set::Iter<'world>>,
     _fetch: PhantomData<Fetch>,
     _filter: PhantomData<Filter>,
 }
@@ -38,7 +35,7 @@ impl<'world, Fetch: QueryFetch, Filter: QueryFilter> Query<'world, Fetch, Filter
         }
     }
 
-    fn next_entity(&mut self) -> Option<entities::Entity<'world>> {
+    fn next_entity(&mut self) -> Option<entity_sparse_set::Entity<'world>> {
         loop {
             if let Some(entities) = &mut self.entities {
                 let entity = entities.next();

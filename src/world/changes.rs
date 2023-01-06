@@ -1,6 +1,6 @@
 use std::{any::TypeId, cell::RefCell, collections::HashMap};
 
-use crate::{component::ChangeRecord, storage::sparse_set::SparseSet};
+use crate::{collections::SparseSet, component::ChangeRecord};
 
 use super::EntityId;
 

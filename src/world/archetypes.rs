@@ -6,9 +6,9 @@ use std::{
 };
 
 use crate::{
+    collections::EntitySparseSet,
     component::Component,
     query::{self, Filter, Query, QueryFetch, QueryFilter},
-    storage::entities::EntitySparseSet,
     world::EntityId,
 };
 

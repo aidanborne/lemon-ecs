@@ -19,18 +19,18 @@ pub trait IntoSystem<T> {
 }
 
 /// Needed to implement `IntoSystem` for `Fn` items.
-trait SystemFn<Args> {
+trait FnSystem<Args> {
     fn call(&self, world: &World);
 }
 
-struct SystemImpl<Func, Args> {
+struct CallableSystem<Func, Args> {
     f: Func,
     _args: PhantomData<Args>,
 }
 
-impl<F, Args> System for SystemImpl<F, Args>
+impl<F, Args> System for CallableSystem<F, Args>
 where
-    F: SystemFn<Args>,
+    F: FnSystem<Args>,
 {
     fn update(&self, world: &World) {
         self.f.call(world);
@@ -39,11 +39,11 @@ where
 
 impl<F, Args> IntoSystem<Args> for F
 where
-    F: SystemFn<Args> + 'static,
+    F: FnSystem<Args> + 'static,
     Args: 'static,
 {
     fn into_system(self) -> Box<dyn System> {
-        Box::new(SystemImpl {
+        Box::new(CallableSystem {
             f: self,
             _args: PhantomData::<Args>,
         })
@@ -52,7 +52,7 @@ where
 
 macro_rules! impl_system_fn {
     ($($param:ident),*) => {
-        impl<$($param: SystemParameter,)* F: Fn($($param),*)> SystemFn<($($param,)*)> for F
+        impl<$($param: SystemParameter,)* F: Fn($($param),*)> FnSystem<($($param,)*)> for F
             where F: Fn($(<$param as SystemParameter>::Result<'_>),*)
         {
             #[inline]

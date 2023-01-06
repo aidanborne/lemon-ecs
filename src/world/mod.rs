@@ -7,10 +7,10 @@ use std::{
 use crate::{
     component::{Bundleable, Component, ComponentChange},
     query::{Query, QueryChanged, QueryFetch, QueryFilter},
-    storage::archetypes::Archetypes,
     system::{Res, ResMut},
 };
 
+mod archetypes;
 mod buffer;
 mod changes;
 mod entities;
@@ -20,6 +20,7 @@ pub use buffer::*;
 pub use entities::EntityId;
 pub(crate) use updates::WorldUpdate;
 
+use archetypes::Archetypes;
 use changes::Changes;
 use entities::Entities;
 

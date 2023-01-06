@@ -4,11 +4,11 @@ use std::{
 };
 
 use crate::{
+    collections::SparseSet,
     component::{Component, ComponentChange},
-    storage::sparse_set::SparseSet,
 };
 
-use super::{entities::EntityId, World};
+use super::{EntityId, World};
 
 pub enum WorldUpdate {
     SpawnEntity(EntityId, Vec<Box<dyn Component>>),

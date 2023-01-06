@@ -1,4 +1,4 @@
-pub struct SparseSet<T> {
+pub(crate) struct SparseSet<T> {
     dense: Vec<(usize, T)>,
     sparse: Vec<usize>,
     len: usize,
