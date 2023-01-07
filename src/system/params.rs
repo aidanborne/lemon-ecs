@@ -7,8 +7,6 @@ use crate::{
 pub trait SystemParameter {
     type Result<'world>;
 
-    fn init(_world: &mut World) {}
-
     fn resolve(world: &World) -> Self::Result<'_>;
 }
 

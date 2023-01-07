@@ -8,7 +8,7 @@ mod params;
 mod resource;
 
 pub use params::SystemParameter;
-pub use resource::*;
+pub use resource::{Res, ResMut};
 
 pub trait System {
     fn update(&self, world: &World);

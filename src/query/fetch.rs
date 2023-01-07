@@ -3,6 +3,7 @@ use lemon_ecs_macros::all_tuples;
 use std::{
     any::TypeId,
     borrow::Cow,
+    mem::ManuallyDrop,
     ops::{Deref, DerefMut},
 };
 
@@ -66,7 +67,7 @@ all_tuples!(impl_query_fetch, 1..16);
 pub struct ComponentMut<'world, T: Component + Clone> {
     world: &'world World,
     id: EntityId,
-    value: Cow<'world, T>,
+    value: ManuallyDrop<Cow<'world, T>>,
 }
 
 impl<'world, T: Component + Clone> ComponentMut<'world, T> {
@@ -74,7 +75,7 @@ impl<'world, T: Component + Clone> ComponentMut<'world, T> {
         Self {
             world,
             id,
-            value: Cow::Borrowed(value),
+            value: ManuallyDrop::new(Cow::Borrowed(value)),
         }
     }
 }
@@ -95,8 +96,8 @@ impl<T: Component + Clone> DerefMut for ComponentMut<'_, T> {
 
 impl<T: Component + Clone> Drop for ComponentMut<'_, T> {
     fn drop(&mut self) {
-        if let Cow::Owned(value) = &self.value {
-            let change = ComponentChange::Added(Box::new(value.clone()));
+        if let Cow::Owned(value) = unsafe { ManuallyDrop::take(&mut self.value) } {
+            let change = ComponentChange::Added(Box::new(value));
 
             self.world
                 .push_update(WorldUpdate::ModifyEntity(self.id, vec![change]))

@@ -162,6 +162,7 @@ pub fn engine_run() {
     assert_eq!(velocity, &Velocity(3, 4), "Velocity should be (3, 4)");
 }
 
+#[derive(Clone)]
 struct Counter {
     count: u32,
 }

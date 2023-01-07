@@ -25,12 +25,10 @@ impl ChangeRecord {
         let old_value = std::mem::take(self);
 
         *self = match old_value {
-            ChangeRecord::Changed(_) => old_value,
             ChangeRecord::Removed(original) => {
                 assert!(replaced.is_none(), "Cannot replace a removed component");
                 ChangeRecord::Changed(original)
             }
-            ChangeRecord::Added => old_value,
             ChangeRecord::NoChange => {
                 if let Some(original) = replaced {
                     // Component must have been replaced because it was present
@@ -39,6 +37,7 @@ impl ChangeRecord {
                     ChangeRecord::Added
                 }
             }
+            _ => old_value,
         }
     }
 

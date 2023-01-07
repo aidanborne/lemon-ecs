@@ -116,8 +116,7 @@ fn is_bundle(field: &Field) -> bool {
     field
         .attrs
         .iter()
-        .find(|attr| attr.path.is_ident("bundle"))
-        .is_some()
+        .any(|attr| attr.path.is_ident("bundle"))
 }
 
 fn impl_into_bundle<T: ToTokens>(
@@ -131,10 +130,10 @@ fn impl_into_bundle<T: ToTokens>(
     let mut types = Vec::new();
 
     for (idx, field) in fields.iter().enumerate() {
-        if is_bundle(&field) {
-            bundles.push(f(idx, &field));
+        if is_bundle(field) {
+            bundles.push(f(idx, field));
         } else {
-            components.push(f(idx, &field));
+            components.push(f(idx, field));
         }
 
         types.push(&field.ty);

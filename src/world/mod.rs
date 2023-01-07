@@ -1,13 +1,12 @@
 use std::{
     any::{Any, TypeId},
-    cell::{Ref, RefCell, RefMut},
+    cell::RefCell,
     collections::{HashMap, HashSet},
 };
 
 use crate::{
     component::{Bundleable, Component, ComponentChange},
     query::{Query, QueryChanged, QueryFetch, QueryFilter},
-    system::{Res, ResMut},
 };
 
 mod archetypes;
@@ -18,7 +17,7 @@ mod updates;
 
 pub use buffer::*;
 pub use entities::EntityId;
-pub(crate) use updates::WorldUpdate;
+pub(crate) use updates::*;
 
 use archetypes::Archetypes;
 use changes::Changes;
@@ -29,7 +28,7 @@ pub struct World {
     entities: RefCell<Entities>,
     archetypes: Archetypes,
     updates: RefCell<Vec<WorldUpdate>>,
-    resources: HashMap<TypeId, Box<RefCell<dyn Any>>>,
+    resources: HashMap<TypeId, Box<dyn Any>>,
     changes: Changes,
 }
 
@@ -183,21 +182,21 @@ impl World {
         QueryChanged::new(self, sparse_set.iter())
     }
 
-    pub fn get_resource<T: 'static>(&self) -> Option<Res<T>> {
-        let cell = &**self.resources.get(&TypeId::of::<T>())?;
-        let ref_value = Ref::map(cell.borrow(), |r| r.downcast_ref::<T>().unwrap());
-        Some(Res::new(ref_value))
+    pub fn get_resource<T: 'static>(&self) -> Option<&T> {
+        self.resources
+            .get(&TypeId::of::<T>())
+            .map(|resource| resource.downcast_ref::<T>().unwrap())
     }
 
-    pub fn get_resource_mut<T: 'static>(&self) -> Option<ResMut<T>> {
-        let cell = &**self.resources.get(&TypeId::of::<T>())?;
-        let ref_value = RefMut::map(cell.borrow_mut(), |r| r.downcast_mut::<T>().unwrap());
-        Some(ResMut::new(ref_value))
+    pub fn get_resource_mut<T: 'static>(&mut self) -> &mut T {
+        self.resources
+            .get_mut(&TypeId::of::<T>())
+            .map(|resource| resource.downcast_mut::<T>().unwrap())
+            .unwrap()
     }
 
     pub fn insert_resource<T: 'static>(&mut self, resource: T) {
-        self.resources
-            .insert(TypeId::of::<T>(), Box::new(RefCell::new(resource)));
+        self.resources.insert(TypeId::of::<T>(), Box::new(resource));
     }
 
     pub fn remove_resource<T: 'static>(&mut self) {

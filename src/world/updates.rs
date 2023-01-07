@@ -1,7 +1,4 @@
-use std::{
-    any::{Any, TypeId},
-    cell::RefCell,
-};
+use std::any::{Any, TypeId};
 
 use crate::{
     collections::SparseSet,
@@ -14,7 +11,7 @@ pub enum WorldUpdate {
     SpawnEntity(EntityId, Vec<Box<dyn Component>>),
     DespawnEntity(EntityId),
     ModifyEntity(EntityId, Vec<ComponentChange>),
-    InsertResource(Box<RefCell<dyn Any>>),
+    InsertResource(Box<dyn Any>),
     RemoveResource(TypeId),
 }
 
@@ -39,8 +36,7 @@ impl WorldUpdate {
                     vec.extend(changes.into_iter())
                 }
                 WorldUpdate::InsertResource(resource) => {
-                    let type_id = (*resource.borrow()).type_id();
-                    world.resources.insert(type_id, resource);
+                    world.resources.insert((*resource).type_id(), resource);
                 }
                 WorldUpdate::RemoveResource(type_id) => {
                     world.resources.remove(&type_id);
