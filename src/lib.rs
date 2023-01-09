@@ -7,7 +7,6 @@ pub mod world;
 
 mod traits;
 
-#[cfg(test)]
-mod tests;
-
-pub use lemon_ecs_macros::{Bundleable, Component};
+pub mod macros {
+    pub use lemon_ecs_macros::{Bundleable, Component};
+}
