@@ -1,5 +1,3 @@
-use std::any::TypeId;
-
 use lemon_ecs::world::World;
 
 mod common;
@@ -17,7 +15,7 @@ pub fn get_component() {
     assert_eq!(position, Some(&Position(1, 2)), "Position should be (1, 2)");
     assert_eq!(velocity, None, "Velocity should be None");
 
-    world.remove(entity, &[TypeId::of::<Position>()]);
+    world.remove::<Position>(entity);
 
     let position = world.get_component::<Position>(entity);
 

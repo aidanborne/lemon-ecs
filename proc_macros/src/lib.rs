@@ -95,11 +95,11 @@ pub fn impl_tuple_bundle(input: TokenStream) -> TokenStream {
         let indices = &indices[0..i];
 
         let ast = quote! {
-            impl<#(#idents),*> Bundleable for (#(#idents,)*)
+            impl<#(#idents),*> Bundle for (#(#idents,)*)
             where
                 #(#idents: 'static + Component),*
             {
-                fn bundle(self) -> Vec<Box<dyn Component>> {
+                fn components(self) -> Vec<Box<dyn Component>> {
                     vec![#(Box::new(self.#indices)),*]
                 }
             }
@@ -113,10 +113,7 @@ pub fn impl_tuple_bundle(input: TokenStream) -> TokenStream {
 
 #[inline]
 fn is_bundle(field: &Field) -> bool {
-    field
-        .attrs
-        .iter()
-        .any(|attr| attr.path.is_ident("bundle"))
+    field.attrs.iter().any(|attr| attr.path.is_ident("bundle"))
 }
 
 fn impl_into_bundle<T: ToTokens>(
@@ -140,16 +137,16 @@ fn impl_into_bundle<T: ToTokens>(
     }
 
     let gen = quote! {
-        impl #generics lemon_ecs::component::Bundleable for #ident #generics
+        impl #generics lemon_ecs::component::Bundle for #ident #generics
         where
-            #(#types: 'static + lemon_ecs::component::Bundleable),*
+            #(#types: 'static + lemon_ecs::component::Bundle),*
         {
-            fn bundle(self) -> Vec<Box<dyn lemon_ecs::component::Component>> {
-                let mut bundle: Vec<Box<dyn lemon_ecs::component::Component>> = vec![#(Box::new(self.#components)),*];
+            fn components(self) -> Vec<Box<dyn lemon_ecs::component::Component>> {
+                let mut components: Vec<Box<dyn lemon_ecs::component::Component>> = vec![#(Box::new(self.#components)),*];
                 #(
-                    bundle.extend(self.#bundles.into());
+                    components.extend(self.#bundles.into());
                 )*
-                bundle
+                components
             }
         }
     };

@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    component::{Bundleable, Component, ComponentChange},
+    component::{Bundle, Component, ComponentChange, TypeBundle},
     query::{Query, QueryChanged, QueryFetch, QueryFilter},
 };
 
@@ -38,10 +38,10 @@ impl World {
         Self::default()
     }
 
-    pub fn spawn(&mut self, components: impl Bundleable) -> EntityId {
+    pub fn spawn(&mut self, components: impl Bundle) -> EntityId {
         let id = self.entities.borrow_mut().spawn().into();
 
-        let bundle = components.bundle();
+        let bundle = components.components();
 
         self.archetypes
             .component_archetype(&bundle)
@@ -161,17 +161,17 @@ impl World {
         }
     }
 
-    pub fn insert(&mut self, id: EntityId, components: impl Bundleable) {
+    pub fn insert(&mut self, id: EntityId, components: impl Bundle) {
         let changes = components
-            .bundle()
+            .components()
             .into_iter()
             .map(|component| ComponentChange::Added(component));
 
         self.modify_entity(id, changes);
     }
 
-    pub fn remove(&mut self, id: EntityId, types: &[TypeId]) {
-        self.modify_entity(id, types.iter().cloned().map(ComponentChange::Removed));
+    pub fn remove<T: TypeBundle>(&mut self, id: EntityId) {
+        self.modify_entity(id, T::type_ids().into_iter().map(ComponentChange::Removed));
     }
 
     pub fn get_component<T: 'static + Component>(&self, id: EntityId) -> Option<&T> {

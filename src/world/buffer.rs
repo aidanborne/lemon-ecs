@@ -1,7 +1,7 @@
 use std::{any::TypeId, cell::RefCell};
 
 use crate::{
-    component::{Bundleable, ComponentChange},
+    component::{Bundle, ComponentChange, TypeBundle},
     world::{EntityId, World, WorldUpdate},
 };
 
@@ -14,11 +14,11 @@ impl<'world> WorldBuffer<'world> {
         Self { world }
     }
 
-    pub fn spawn(&self, components: impl Bundleable) -> EntityBuffer<'world> {
+    pub fn spawn(&self, components: impl Bundle) -> EntityBuffer<'world> {
         let id = self.world.entities.borrow_mut().spawn().into();
 
         self.world
-            .push_update(WorldUpdate::SpawnEntity(id, components.bundle()));
+            .push_update(WorldUpdate::SpawnEntity(id, components.components()));
 
         EntityBuffer::new(self.world, id)
     }
@@ -27,18 +27,15 @@ impl<'world> WorldBuffer<'world> {
         self.world.push_update(WorldUpdate::DespawnEntity(id));
     }
 
-    pub fn insert(&self, id: EntityId, components: impl Bundleable) -> EntityBuffer<'world> {
+    pub fn insert(&self, id: EntityId, components: impl Bundle) -> EntityBuffer<'world> {
         let buffer = EntityBuffer::new(self.world, id);
         buffer.insert(components);
         buffer
     }
 
-    pub fn remove<Iter>(&self, id: EntityId, types: Iter) -> EntityBuffer<'world>
-    where
-        Iter: IntoIterator<Item = TypeId>,
-    {
+    pub fn remove<T: TypeBundle>(&self, id: EntityId) -> EntityBuffer<'world> {
         let buffer = EntityBuffer::new(self.world, id);
-        buffer.remove(types);
+        buffer.remove::<T>();
         buffer
     }
 
@@ -65,9 +62,9 @@ impl<'world> EntityBuffer<'world> {
         Self { world, id }
     }
 
-    pub fn insert(&self, components: impl Bundleable) -> &Self {
+    pub fn insert(&self, components: impl Bundle) -> &Self {
         let changes = components
-            .bundle()
+            .components()
             .into_iter()
             .map(|component| ComponentChange::Added(component))
             .collect();
@@ -78,11 +75,11 @@ impl<'world> EntityBuffer<'world> {
         self
     }
 
-    pub fn remove<Iter>(&self, types: Iter) -> &Self
-    where
-        Iter: IntoIterator<Item = TypeId>,
-    {
-        let types = types.into_iter().map(ComponentChange::Removed).collect();
+    pub fn remove<T: TypeBundle>(&self) -> &Self {
+        let types = T::type_ids()
+            .into_iter()
+            .map(ComponentChange::Removed)
+            .collect();
 
         self.world
             .push_update(WorldUpdate::ModifyEntity(self.id, types));
