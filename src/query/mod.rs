@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{any::TypeId, collections::HashSet, marker::PhantomData};
 
 use crate::{
     collections::{entity_sparse_set, sparse_set, EntitySparseSet},
@@ -10,7 +10,7 @@ mod fetch;
 mod filter;
 
 pub use fetch::QueryFetch;
-pub(crate) use filter::{Filter, QueryFilter};
+pub use filter::QueryFilter;
 pub use filter::{With, Without};
 
 pub struct Query<'world, Fetch: QueryFetch, Filter: QueryFilter = ()> {
@@ -53,17 +53,13 @@ impl<'world, Fetch: QueryFetch, Filter: QueryFilter> Query<'world, Fetch, Filter
         }
     }
 
-    pub fn get_filters() -> Vec<filter::Filter> {
-        Fetch::type_ids()
-            .into_iter()
-            .map(filter::Filter::With)
-            .chain(Filter::get_filters().into_iter())
-            .collect()
+    pub fn should_query(type_ids: &HashSet<TypeId>) -> bool {
+        Fetch::should_fetch(type_ids) && Filter::filter(type_ids)
     }
 }
 
 impl<'world, Fetch: QueryFetch, Filter: QueryFilter> Iterator for Query<'world, Fetch, Filter> {
-    type Item = Fetch::Result<'world>;
+    type Item = Fetch::Output<'world>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.next_entity()

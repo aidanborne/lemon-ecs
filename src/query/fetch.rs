@@ -3,6 +3,7 @@ use lemon_ecs_macros::all_tuples;
 use std::{
     any::TypeId,
     borrow::Cow,
+    collections::HashSet,
     mem::ManuallyDrop,
     ops::{Deref, DerefMut},
 };
@@ -14,33 +15,33 @@ use crate::{
 };
 
 pub trait QueryFetch {
-    type Result<'world>;
+    type Output<'world>;
 
-    fn type_ids() -> Vec<TypeId>;
+    fn should_fetch(type_ids: &HashSet<TypeId>) -> bool;
 
-    fn fetch<'world>(world: &'world World, entity: &Entity<'world>) -> Self::Result<'world>;
+    fn fetch<'world>(world: &'world World, entity: &Entity<'world>) -> Self::Output<'world>;
 }
 
 impl<T: 'static + Component> QueryFetch for &'_ T {
-    type Result<'world> = &'world T;
+    type Output<'world> = &'world T;
 
-    fn type_ids() -> Vec<TypeId> {
-        vec![TypeId::of::<T>()]
+    fn should_fetch(type_ids: &HashSet<TypeId>) -> bool {
+        type_ids.contains(&TypeId::of::<T>())
     }
 
-    fn fetch<'world>(_world: &'world World, entity: &Entity<'world>) -> Self::Result<'world> {
+    fn fetch<'world>(_world: &'world World, entity: &Entity<'world>) -> Self::Output<'world> {
         entity.get_component::<T>().unwrap()
     }
 }
 
 impl QueryFetch for EntityId {
-    type Result<'world> = EntityId;
+    type Output<'world> = EntityId;
 
-    fn type_ids() -> Vec<TypeId> {
-        vec![]
+    fn should_fetch(_type_ids: &HashSet<TypeId>) -> bool {
+        true
     }
 
-    fn fetch<'world>(_world: &'world World, entity: &Entity<'world>) -> Self::Result<'world> {
+    fn fetch<'world>(_world: &'world World, entity: &Entity<'world>) -> Self::Output<'world> {
         entity.id()
     }
 }
@@ -48,14 +49,13 @@ impl QueryFetch for EntityId {
 macro_rules! impl_query_fetch {
     ($($t:ident),*) => {
         impl<$($t: QueryFetch),*> QueryFetch for ($($t,)*) {
-            type Result<'world> = ($($t::Result<'world>,)*);
+            type Output<'world> = ($($t::Output<'world>,)*);
 
-            fn type_ids() -> Vec<TypeId> {
-                let type_ids: Vec<Vec<TypeId>> = vec![$($t::type_ids()),*];
-                type_ids.concat()
+            fn should_fetch(type_ids: &HashSet<TypeId>) -> bool {
+                $($t::should_fetch(type_ids) &&)* true
             }
 
-            fn fetch<'world>(world: &'world World, entity: &Entity<'world>) -> Self::Result<'world> {
+            fn fetch<'world>(world: &'world World, entity: &Entity<'world>) -> Self::Output<'world> {
                 ($($t::fetch(world, entity),)*)
             }
         }
@@ -105,26 +105,14 @@ impl<T: Component + Clone> Drop for ComponentMut<'_, T> {
     }
 }
 
-impl<T: Component + Clone> QueryFetch for ComponentMut<'_, T> {
-    type Result<'world> = ComponentMut<'world, T>;
-
-    fn type_ids() -> Vec<TypeId> {
-        vec![TypeId::of::<T>()]
-    }
-
-    fn fetch<'world>(world: &'world World, entity: &Entity<'world>) -> Self::Result<'world> {
-        ComponentMut::new(world, entity.id(), entity.get_component::<T>().unwrap())
-    }
-}
-
 impl<T: Component + Clone> QueryFetch for &'_ mut T {
-    type Result<'world> = ComponentMut<'world, T>;
+    type Output<'world> = ComponentMut<'world, T>;
 
-    fn type_ids() -> Vec<TypeId> {
-        vec![TypeId::of::<T>()]
+    fn should_fetch(type_ids: &HashSet<TypeId>) -> bool {
+        type_ids.contains(&TypeId::of::<T>())
     }
 
-    fn fetch<'world>(world: &'world World, entity: &Entity<'world>) -> Self::Result<'world> {
+    fn fetch<'world>(world: &'world World, entity: &Entity<'world>) -> Self::Output<'world> {
         ComponentMut::new(world, entity.id(), entity.get_component::<T>().unwrap())
     }
 }

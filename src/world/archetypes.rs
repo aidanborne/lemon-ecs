@@ -8,7 +8,7 @@ use std::{
 use crate::{
     collections::EntitySparseSet,
     component::Component,
-    query::{self, Filter, Query, QueryFetch, QueryFilter},
+    query::{Query, QueryFetch, QueryFilter},
     world::EntityId,
 };
 
@@ -17,7 +17,7 @@ use crate::{
 pub(crate) struct ArchetypeIdx(usize);
 
 struct QueryResult {
-    filters: Vec<Filter>,
+    filter: fn(&HashSet<TypeId>) -> bool,
     indices: Vec<usize>,
 }
 
@@ -75,7 +75,7 @@ impl Archetypes {
                 self.archetypes.push(storage);
 
                 for (_type_id, cache) in self.query_cache.borrow_mut().iter_mut() {
-                    if Filter::filter_all(&cache.filters, &hash_set) {
+                    if (cache.filter)(&hash_set) {
                         cache.indices.push(idx);
                     }
                 }
@@ -94,17 +94,17 @@ impl Archetypes {
         let mut query_cache = self.query_cache.borrow_mut();
         let type_id = TypeId::of::<(Fetch, Filter)>();
 
+        let filter = Query::<Fetch, Filter>::should_query;
+
         let indices = match query_cache.get(&type_id) {
             Some(result) => &result.indices,
             None => {
-                let filter_kinds = Query::<Fetch, Filter>::get_filters();
-
                 let indices = self
                     .archetypes
                     .iter()
                     .enumerate()
                     .filter_map(|(idx, archetype)| {
-                        if query::Filter::filter_all(&filter_kinds, &archetype.type_ids()) {
+                        if filter(&archetype.type_ids()) {
                             Some(idx)
                         } else {
                             None
@@ -112,10 +112,7 @@ impl Archetypes {
                     })
                     .collect();
 
-                let result = QueryResult {
-                    filters: filter_kinds,
-                    indices,
-                };
+                let result = QueryResult { filter, indices };
 
                 query_cache.insert(type_id, result);
                 &query_cache.get(&type_id).unwrap().indices
