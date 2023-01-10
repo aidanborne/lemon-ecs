@@ -4,7 +4,6 @@ use crate::{collections::SparseSet, component::ChangeRecord};
 
 use super::EntityId;
 
-#[derive(PartialEq)]
 enum ChangeStatus {
     Processed,
     Unprocessed,
@@ -34,6 +33,18 @@ impl Changes {
         None
     }
 
+    pub fn is_processed(&self, id: EntityId) -> bool {
+        for (type_id, status) in self.tracked_changes.borrow().iter() {
+            if matches!(status, ChangeStatus::Unprocessed)
+                && matches!(self.changes.get(type_id), Some(sparse_set) if sparse_set.contains(*id))
+            {
+                return false;
+            }
+        }
+
+        true
+    }
+
     fn set_status(&self, type_id: TypeId, status: ChangeStatus) {
         self.tracked_changes.borrow_mut().insert(type_id, status);
     }
@@ -57,7 +68,7 @@ impl Changes {
         let mut tracked_changes = self.tracked_changes.borrow_mut();
 
         for (type_id, status) in tracked_changes.iter() {
-            if *status == ChangeStatus::Processed {
+            if matches!(status, ChangeStatus::Processed) {
                 self.changes.remove(type_id);
             }
         }

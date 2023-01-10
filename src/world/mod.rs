@@ -30,6 +30,7 @@ pub struct World {
     updates: RefCell<Vec<WorldUpdate>>,
     resources: HashMap<TypeId, Box<dyn Any>>,
     changes: Changes,
+    despawned: Vec<EntityId>,
 }
 
 impl World {
@@ -48,13 +49,25 @@ impl World {
         id
     }
 
-    pub fn despawn(&mut self, id: EntityId) -> Option<Vec<Box<dyn Component>>> {
+    pub fn despawn(&mut self, id: EntityId) {
         if let Some(archetype) = self.archetypes.entity_archetype_mut(id) {
-            let bundle = archetype.remove(id);
-            self.entities.borrow_mut().despawn(*id);
-            bundle
-        } else {
-            None
+            if let Some(components) = archetype.remove(id) {
+                for component in components {
+                    let type_id = (*component).as_any().type_id();
+
+                    if let Some(record) = self.changes.get_record(id, type_id) {
+                        record.map_removed(component);
+                    }
+                }
+
+                if self.changes.is_processed(id) {
+                    self.entities.borrow_mut().despawn(*id);
+                } else {
+                    self.despawned.push(id);
+                }
+            } else {
+                self.entities.borrow_mut().despawn(*id);
+            }
         }
     }
 
@@ -203,13 +216,23 @@ impl World {
         self.resources.remove(&TypeId::of::<T>());
     }
 
-    pub fn process_updates(&mut self) {
+    pub(crate) fn process_updates(&mut self) {
         let updates = std::mem::take(&mut *self.updates.borrow_mut());
         WorldUpdate::process(self, updates);
+
         self.changes.clear_processed();
+
+        self.despawned.retain(|&id| {
+            if self.changes.is_processed(id) {
+                self.entities.borrow_mut().despawn(*id);
+                false
+            } else {
+                true
+            }
+        });
     }
 
-    pub fn push_update(&self, update: WorldUpdate) {
+    pub(crate) fn push_update(&self, update: WorldUpdate) {
         self.updates.borrow_mut().push(update);
     }
 }
