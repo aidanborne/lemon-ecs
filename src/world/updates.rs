@@ -8,7 +8,7 @@ use crate::{
 use super::{EntityId, World};
 
 pub enum WorldUpdate {
-    SpawnEntity(EntityId, Vec<Box<dyn Component>>),
+    SpawnEntity(Vec<Box<dyn Component>>),
     DespawnEntity(EntityId),
     ModifyEntity(EntityId, Vec<ComponentChange>),
     InsertResource(Box<dyn Any>),
@@ -21,11 +21,8 @@ impl WorldUpdate {
 
         for update in updates {
             match update {
-                WorldUpdate::SpawnEntity(id, components) => {
-                    world
-                        .archetypes
-                        .component_archetype(&components)
-                        .insert(id, components);
+                WorldUpdate::SpawnEntity(components) => {
+                    world.spawn(components);
                 }
                 WorldUpdate::DespawnEntity(id) => {
                     world.despawn(id);

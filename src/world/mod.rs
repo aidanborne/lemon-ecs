@@ -25,7 +25,7 @@ use entities::Entities;
 
 #[derive(Default)]
 pub struct World {
-    entities: RefCell<Entities>,
+    entities: Entities,
     archetypes: Archetypes,
     updates: RefCell<Vec<WorldUpdate>>,
     resources: HashMap<TypeId, Box<dyn Any>>,
@@ -39,7 +39,7 @@ impl World {
     }
 
     pub fn spawn(&mut self, components: impl Bundle) -> EntityId {
-        let id = self.entities.borrow_mut().spawn().into();
+        let id = self.entities.spawn().into();
 
         let bundle = components.components();
 
@@ -61,12 +61,12 @@ impl World {
                 }
 
                 if self.changes.is_processed(id) {
-                    self.entities.borrow_mut().despawn(*id);
+                    self.entities.despawn(*id);
                 } else {
                     self.despawned.push(id);
                 }
             } else {
-                self.entities.borrow_mut().despawn(*id);
+                self.entities.despawn(*id);
             }
         }
     }
@@ -224,7 +224,7 @@ impl World {
 
         self.despawned.retain(|&id| {
             if self.changes.is_processed(id) {
-                self.entities.borrow_mut().despawn(*id);
+                self.entities.despawn(*id);
                 false
             } else {
                 true

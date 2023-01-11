@@ -1,4 +1,4 @@
-use std::{any::TypeId, cell::RefCell};
+use std::{any::TypeId, mem::ManuallyDrop};
 
 use crate::{
     component::{Bundle, ComponentChange, TypeBundle},
@@ -15,12 +15,9 @@ impl<'world> WorldBuffer<'world> {
     }
 
     pub fn spawn(&self, components: impl Bundle) -> EntityBuffer<'world> {
-        let id = self.world.entities.borrow_mut().spawn().into();
-
-        self.world
-            .push_update(WorldUpdate::SpawnEntity(id, components.components()));
-
-        EntityBuffer::new(self.world, id)
+        let mut buffer = EntityBuffer::spawn(self.world);
+        buffer.insert(components);
+        buffer
     }
 
     pub fn despawn(&self, id: EntityId) {
@@ -28,22 +25,20 @@ impl<'world> WorldBuffer<'world> {
     }
 
     pub fn insert(&self, id: EntityId, components: impl Bundle) -> EntityBuffer<'world> {
-        let buffer = EntityBuffer::new(self.world, id);
+        let mut buffer = EntityBuffer::new(self.world, id);
         buffer.insert(components);
         buffer
     }
 
     pub fn remove<T: TypeBundle>(&self, id: EntityId) -> EntityBuffer<'world> {
-        let buffer = EntityBuffer::new(self.world, id);
+        let mut buffer = EntityBuffer::new(self.world, id);
         buffer.remove::<T>();
         buffer
     }
 
     pub fn insert_resource<T: 'static>(&self, resource: T) {
         self.world
-            .push_update(WorldUpdate::InsertResource(Box::new(RefCell::new(
-                resource,
-            ))));
+            .push_update(WorldUpdate::InsertResource(Box::new(resource)));
     }
 
     pub fn remove_resource<T: 'static>(&self) {
@@ -54,36 +49,65 @@ impl<'world> WorldBuffer<'world> {
 
 pub struct EntityBuffer<'world> {
     world: &'world World,
-    id: EntityId,
+    id: Option<EntityId>,
+    changes: ManuallyDrop<Vec<ComponentChange>>,
 }
 
 impl<'world> EntityBuffer<'world> {
+    pub fn spawn(world: &'world World) -> Self {
+        Self {
+            world,
+            id: None,
+            changes: ManuallyDrop::new(Vec::new()),
+        }
+    }
+
     pub fn new(world: &'world World, id: EntityId) -> Self {
-        Self { world, id }
+        Self {
+            world,
+            id: Some(id),
+            changes: ManuallyDrop::new(Vec::new()),
+        }
     }
 
-    pub fn insert(&self, components: impl Bundle) -> &Self {
-        let changes = components
-            .components()
-            .into_iter()
-            .map(|component| ComponentChange::Added(component))
-            .collect();
-
-        self.world
-            .push_update(WorldUpdate::ModifyEntity(self.id, changes));
+    pub fn insert(&mut self, components: impl Bundle) -> &Self {
+        for component in components.components() {
+            self.changes.push(ComponentChange::Added(component));
+        }
 
         self
     }
 
-    pub fn remove<T: TypeBundle>(&self) -> &Self {
-        let types = T::type_ids()
-            .into_iter()
-            .map(ComponentChange::Removed)
-            .collect();
-
-        self.world
-            .push_update(WorldUpdate::ModifyEntity(self.id, types));
+    pub fn remove<T: TypeBundle>(&mut self) -> &Self {
+        for type_id in T::type_ids() {
+            self.changes.push(ComponentChange::Removed(type_id));
+        }
 
         self
+    }
+}
+
+impl<'world> Drop for EntityBuffer<'world> {
+    fn drop(&mut self) {
+        let changes = unsafe { ManuallyDrop::take(&mut self.changes).into_iter() };
+
+        let update = match self.id {
+            Some(id) => WorldUpdate::ModifyEntity(id, changes.collect()),
+            None => {
+                let components = changes
+                    .filter_map(|change| {
+                        if let ComponentChange::Added(component) = change {
+                            Some(component)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                WorldUpdate::SpawnEntity(components)
+            }
+        };
+
+        self.world.push_update(update);
     }
 }
