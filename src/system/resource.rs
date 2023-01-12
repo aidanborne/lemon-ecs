@@ -9,28 +9,28 @@ use crate::world::{World, WorldUpdate};
 use super::params::SystemParameter;
 
 pub trait ResParameter {
-    type Resource;
-    type Output<'world>: Deref<Target = Self::Resource>;
+    type Inner;
+    type Output<'world>;
 
     fn from_world(world: &World) -> Option<Self::Output<'_>>;
 }
 
 impl<T: ResParameter> SystemParameter for Option<T> {
-    type Result<'world> = Option<T::Output<'world>>;
+    type Output<'world> = Option<T::Output<'world>>;
 
-    fn resolve(world: &World) -> Self::Result<'_> {
+    fn resolve(world: &World) -> Self::Output<'_> {
         T::from_world(world)
     }
 }
 
 impl<T: ResParameter> SystemParameter for T {
-    type Result<'world> = T::Output<'world>;
+    type Output<'world> = T::Output<'world>;
 
-    fn resolve(world: &World) -> Self::Result<'_> {
+    fn resolve(world: &World) -> Self::Output<'_> {
         T::from_world(world).unwrap_or_else(|| {
             panic!(
                 "Resource '{}' not found in world",
-                std::any::type_name::<T::Resource>()
+                std::any::type_name::<T::Inner>()
             )
         })
     }
@@ -54,7 +54,7 @@ impl<T> Deref for Res<'_, T> {
 }
 
 impl<T> ResParameter for Res<'_, T> {
-    type Resource = T;
+    type Inner = T;
     type Output<'world> = Res<'world, T>;
 
     fn from_world(world: &World) -> Option<Self::Output<'_>> {
@@ -100,7 +100,7 @@ impl<T: Clone> Drop for ResMut<'_, T> {
 }
 
 impl<T: Clone> ResParameter for ResMut<'_, T> {
-    type Resource = T;
+    type Inner = T;
     type Output<'world> = ResMut<'world, T>;
 
     fn from_world(world: &World) -> Option<Self::Output<'_>> {

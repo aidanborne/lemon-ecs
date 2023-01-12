@@ -53,7 +53,7 @@ where
 macro_rules! impl_system_fn {
     ($($param:ident),*) => {
         impl<$($param: SystemParameter,)* F: Fn($($param),*)> FnSystem<($($param,)*)> for F
-            where F: Fn($(<$param as SystemParameter>::Result<'_>),*)
+            where F: Fn($(<$param as SystemParameter>::Output<'_>),*)
         {
             #[inline]
             fn call(&self, _world: &World) {

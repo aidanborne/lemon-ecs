@@ -5,41 +5,41 @@ use crate::{
 };
 
 pub trait SystemParameter {
-    type Result<'world>;
+    type Output<'world>;
 
-    fn resolve(world: &World) -> Self::Result<'_>;
+    fn resolve(world: &World) -> Self::Output<'_>;
 }
 
 impl<Fetch: 'static + QueryFetch, Filter: 'static + QueryFilter> SystemParameter
     for Query<'_, Fetch, Filter>
 {
-    type Result<'world> = Query<'world, Fetch, Filter>;
+    type Output<'world> = Query<'world, Fetch, Filter>;
 
-    fn resolve(world: &World) -> Self::Result<'_> {
+    fn resolve(world: &World) -> Self::Output<'_> {
         world.query::<Fetch, Filter>()
     }
 }
 
 impl<T: 'static + Component> SystemParameter for QueryChanged<'_, T> {
-    type Result<'world> = QueryChanged<'world, T>;
+    type Output<'world> = QueryChanged<'world, T>;
 
-    fn resolve(world: &World) -> Self::Result<'_> {
+    fn resolve(world: &World) -> Self::Output<'_> {
         world.query_changed::<T>()
     }
 }
 
 impl SystemParameter for &'_ World {
-    type Result<'world> = &'world World;
+    type Output<'world> = &'world World;
 
-    fn resolve(world: &World) -> Self::Result<'_> {
+    fn resolve(world: &World) -> Self::Output<'_> {
         world
     }
 }
 
 impl SystemParameter for WorldBuffer<'_> {
-    type Result<'world> = WorldBuffer<'world>;
+    type Output<'world> = WorldBuffer<'world>;
 
-    fn resolve(world: &World) -> Self::Result<'_> {
+    fn resolve(world: &World) -> Self::Output<'_> {
         WorldBuffer::new(world)
     }
 }
