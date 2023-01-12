@@ -1,4 +1,4 @@
-use std::{any::TypeId, mem::ManuallyDrop};
+use std::mem::ManuallyDrop;
 
 use crate::{
     component::{Bundle, ComponentChange, TypeBundle},
@@ -40,11 +40,6 @@ impl<'world> WorldBuffer<'world> {
         self.world
             .push_update(WorldUpdate::InsertResource(Box::new(resource)));
     }
-
-    pub fn remove_resource<T: 'static>(&self) {
-        self.world
-            .push_update(WorldUpdate::RemoveResource(TypeId::of::<T>()));
-    }
 }
 
 pub struct EntityBuffer<'world> {
@@ -70,7 +65,7 @@ impl<'world> EntityBuffer<'world> {
         }
     }
 
-    pub fn insert(&mut self, components: impl Bundle) -> &Self {
+    pub fn insert(&mut self, components: impl Bundle) -> &mut Self {
         for component in components.components() {
             self.changes.push(ComponentChange::Added(component));
         }
@@ -78,7 +73,7 @@ impl<'world> EntityBuffer<'world> {
         self
     }
 
-    pub fn remove<T: TypeBundle>(&mut self) -> &Self {
+    pub fn remove<T: TypeBundle>(&mut self) -> &mut Self {
         for type_id in T::type_ids() {
             self.changes.push(ComponentChange::Removed(type_id));
         }

@@ -212,10 +212,6 @@ impl World {
         self.resources.insert(TypeId::of::<T>(), Box::new(resource));
     }
 
-    pub fn remove_resource<T: 'static>(&mut self) {
-        self.resources.remove(&TypeId::of::<T>());
-    }
-
     pub(crate) fn process_updates(&mut self) {
         let updates = std::mem::take(&mut *self.updates.borrow_mut());
         WorldUpdate::process(self, updates);

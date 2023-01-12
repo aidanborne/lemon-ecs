@@ -1,4 +1,4 @@
-use std::any::{Any, TypeId};
+use std::any::Any;
 
 use crate::{
     collections::SparseSet,
@@ -12,7 +12,6 @@ pub enum WorldUpdate {
     DespawnEntity(EntityId),
     ModifyEntity(EntityId, Vec<ComponentChange>),
     InsertResource(Box<dyn Any>),
-    RemoveResource(TypeId),
 }
 
 impl WorldUpdate {
@@ -34,9 +33,6 @@ impl WorldUpdate {
                 }
                 WorldUpdate::InsertResource(resource) => {
                     world.resources.insert((*resource).type_id(), resource);
-                }
-                WorldUpdate::RemoveResource(type_id) => {
-                    world.resources.remove(&type_id);
                 }
             };
         }
