@@ -1,9 +1,13 @@
 use std::{any::TypeId, collections::HashSet, marker::PhantomData};
 
 use crate::{
-    collections::{entity_sparse_set, sparse_set, EntitySparseSet},
+    collections::sparse_set,
     component::{ChangeRecord, Component},
-    world::{EntityId, World},
+    entities::{
+        archetype::{self, Archetype, Entity},
+        EntityId,
+    },
+    world::World,
 };
 
 mod fetch;
@@ -15,17 +19,14 @@ pub use filter::{With, Without};
 
 pub struct Query<'world, Fetch: QueryFetch, Filter: QueryFilter = ()> {
     world: &'world World,
-    archetypes: std::vec::IntoIter<&'world EntitySparseSet>,
-    entities: Option<entity_sparse_set::Iter<'world>>,
+    archetypes: std::vec::IntoIter<&'world Archetype>,
+    entities: Option<archetype::Iter<'world>>,
     _fetch: PhantomData<Fetch>,
     _filter: PhantomData<Filter>,
 }
 
 impl<'world, Fetch: QueryFetch, Filter: QueryFilter> Query<'world, Fetch, Filter> {
-    pub fn new(
-        world: &'world World,
-        archetypes: std::vec::IntoIter<&'world EntitySparseSet>,
-    ) -> Self {
+    pub fn new(world: &'world World, archetypes: std::vec::IntoIter<&'world Archetype>) -> Self {
         Self {
             world,
             archetypes,
@@ -35,7 +36,7 @@ impl<'world, Fetch: QueryFetch, Filter: QueryFilter> Query<'world, Fetch, Filter
         }
     }
 
-    fn next_entity(&mut self) -> Option<entity_sparse_set::Entity<'world>> {
+    fn next_entity(&mut self) -> Option<Entity<'world>> {
         loop {
             if let Some(entities) = &mut self.entities {
                 let entity = entities.next();

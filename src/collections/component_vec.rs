@@ -1,4 +1,4 @@
-use lemon_ecs_macros::impl_as_any;
+use std::any::Any;
 
 use crate::{
     component::Component,
@@ -18,9 +18,15 @@ pub trait ComponentVec: AsAny {
     fn swap_remove(&mut self, idx: usize) -> Box<dyn Component>;
 }
 
-extern crate self as lemon_ecs;
+impl<T: 'static> AsAny for Vec<T> {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 
-impl_as_any!(Vec<T: 'static + Component>);
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
 
 impl<T: 'static + Component> ComponentVec for Vec<T> {
     fn swap_replace(

@@ -1,22 +1,18 @@
 use std::{any::TypeId, collections::HashMap, iter::Enumerate, marker::PhantomData};
 
-use crate::{component::Component, world::EntityId};
+use crate::{
+    collections::{sparse_set, ComponentVec, SparseSet},
+    component::Component,
+};
 
-use super::{sparse_set::SparseSet, ComponentVec};
+use super::EntityId;
 
-pub struct EntitySparseSet {
+pub struct Archetype {
     entities: SparseSet<PhantomData<bool>>,
     components: HashMap<TypeId, Box<dyn ComponentVec>>,
 }
 
-impl EntitySparseSet {
-    pub fn new() -> Self {
-        Self {
-            entities: SparseSet::new(),
-            components: HashMap::new(),
-        }
-    }
-
+impl Archetype {
     pub fn from_components(components: &[Box<dyn Component>]) -> Self {
         let mut hash_map = HashMap::new();
 
@@ -111,12 +107,6 @@ impl EntitySparseSet {
     }
 }
 
-impl Default for EntitySparseSet {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
 pub struct EntityLocation(usize);
@@ -133,16 +123,12 @@ impl EntityLocation {
 
 pub struct Entity<'archetype> {
     id: EntityId,
-    archetype: &'archetype EntitySparseSet,
+    archetype: &'archetype Archetype,
     location: EntityLocation,
 }
 
 impl<'archetype> Entity<'archetype> {
-    pub fn new(
-        id: EntityId,
-        archetype: &'archetype EntitySparseSet,
-        location: EntityLocation,
-    ) -> Self {
+    pub fn new(id: EntityId, archetype: &'archetype Archetype, location: EntityLocation) -> Self {
         Self {
             id,
             archetype,
@@ -154,7 +140,7 @@ impl<'archetype> Entity<'archetype> {
         self.id
     }
 
-    pub fn archetype(&self) -> &'archetype EntitySparseSet {
+    pub fn archetype(&self) -> &'archetype Archetype {
         self.archetype
     }
 
@@ -168,12 +154,12 @@ impl<'archetype> Entity<'archetype> {
 }
 
 pub struct Iter<'archetype> {
-    entities: Enumerate<super::sparse_set::Iter<'archetype, PhantomData<bool>>>,
-    archetype: &'archetype EntitySparseSet,
+    entities: Enumerate<sparse_set::Iter<'archetype, PhantomData<bool>>>,
+    archetype: &'archetype Archetype,
 }
 
 impl<'archetype> Iter<'archetype> {
-    pub fn new(archetype: &'archetype EntitySparseSet) -> Self {
+    pub fn new(archetype: &'archetype Archetype) -> Self {
         Self {
             entities: archetype.entities.iter().enumerate(),
             archetype,

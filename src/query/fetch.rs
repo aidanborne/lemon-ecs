@@ -9,9 +9,9 @@ use std::{
 };
 
 use crate::{
-    collections::entity_sparse_set::Entity,
     component::{Component, ComponentChange},
-    world::{EntityId, World, WorldUpdate},
+    entities::{Entity, EntityId},
+    world::{World, WorldUpdate},
 };
 
 pub trait QueryFetch {

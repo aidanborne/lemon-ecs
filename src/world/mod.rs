@@ -6,24 +6,20 @@ use std::{
 
 use crate::{
     component::{Bundle, Component, ComponentChange, TypeBundle},
+    entities::{Archetypes, Entities, EntityId},
     query::{Query, QueryChanged, QueryFetch, QueryFilter},
     system::Resource,
     traits::Downcast,
 };
 
-mod archetypes;
 mod buffer;
 mod changes;
-mod entities;
 mod updates;
 
 pub use buffer::*;
-pub use entities::EntityId;
 pub(crate) use updates::*;
 
-use archetypes::Archetypes;
 use changes::Changes;
-use entities::Entities;
 
 #[derive(Default)]
 pub struct World {

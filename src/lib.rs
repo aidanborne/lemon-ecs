@@ -1,6 +1,7 @@
 pub mod collections;
 pub mod component;
 pub mod engine;
+pub mod entities;
 pub mod query;
 pub mod system;
 pub mod traits;
