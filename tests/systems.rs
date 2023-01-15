@@ -1,7 +1,8 @@
-use lemon_ecs::{engine::Engine, query::Query, system::ResMut, world::WorldBuffer};
+use lemon_ecs::{engine::Engine, query::Query, system::Resource, world::WorldBuffer};
 
 mod common;
 use common::components::{Name, Position, Velocity};
+use lemon_ecs_macros::impl_as_any;
 
 fn print_system(buffer: WorldBuffer, query: Query<(&mut Position, &Velocity)>) {
     for (mut position, velocity) in query {
@@ -57,15 +58,17 @@ impl Counter {
     }
 }
 
-fn counter_system(mut counter: ResMut<Counter>) {
-    counter.increment();
+impl Resource for Counter {
+    fn update(&mut self) {
+        self.increment();
+    }
 }
+
+impl_as_any!(Counter);
 
 #[test]
 pub fn engine_resource() {
     let mut engine = Engine::new();
-    engine.add_system(counter_system);
-
     engine.insert_resource(Counter::new());
 
     for _ in 0..15 {

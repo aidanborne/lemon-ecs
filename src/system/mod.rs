@@ -5,10 +5,10 @@ use lemon_ecs_macros::all_tuples;
 use crate::world::World;
 
 mod params;
-mod resource;
+mod resources;
 
 pub use params::SystemParameter;
-pub use resource::{Res, ResMut};
+pub use resources::{Res, Resource};
 
 pub trait System {
     fn update(&self, world: &World);
@@ -64,7 +64,3 @@ macro_rules! impl_system_fn {
 }
 
 all_tuples!(impl_system_fn, 0..16);
-
-pub mod prelude {
-    pub use super::{params::SystemParameter, resource::*, System};
-}

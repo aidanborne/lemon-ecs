@@ -3,6 +3,7 @@ use std::any::Any;
 use crate::{
     collections::SparseSet,
     component::{Component, ComponentChange},
+    system::Resource,
 };
 
 use super::{EntityId, World};
@@ -11,7 +12,7 @@ pub enum WorldUpdate {
     SpawnEntity(Vec<Box<dyn Component>>),
     DespawnEntity(EntityId),
     ModifyEntity(EntityId, Vec<ComponentChange>),
-    InsertResource(Box<dyn Any>),
+    InsertResource(Box<dyn Resource>),
 }
 
 impl WorldUpdate {

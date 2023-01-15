@@ -2,6 +2,7 @@ use std::mem::ManuallyDrop;
 
 use crate::{
     component::{Bundle, ComponentChange, TypeBundle},
+    system::Resource,
     world::{EntityId, World, WorldUpdate},
 };
 
@@ -36,7 +37,7 @@ impl<'world> WorldBuffer<'world> {
         buffer
     }
 
-    pub fn insert_resource<T: 'static>(&self, resource: T) {
+    pub fn insert_resource<T: 'static + Resource>(&self, resource: T) {
         self.world
             .push_update(WorldUpdate::InsertResource(Box::new(resource)));
     }

@@ -6,17 +6,37 @@ use syn::{
     *,
 };
 
-#[proc_macro_derive(Component)]
-pub fn derive_component(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-    let generics = input.generics;
+struct AsAnyInput {
+    ident: Ident,
+    generics: Generics,
+}
+
+impl Parse for AsAnyInput {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let ident = input.parse::<Ident>()?;
+        let generics = input.parse::<Generics>()?;
+        Ok(AsAnyInput { ident, generics })
+    }
+}
+
+#[proc_macro]
+pub fn impl_as_any(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as AsAnyInput);
     let ident = input.ident;
+    let generics = input.generics;
+
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     let gen = quote! {
-        impl #generics lemon_ecs::component::Component for #ident #generics {
+        impl #impl_generics lemon_ecs::traits::AsAny for #ident #ty_generics #where_clause {
             #[inline]
-            fn get_storage(&self) -> Box<dyn lemon_ecs::collections::ComponentVec> {
-                Box::new(Vec::<#ident #generics>::new())
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
+
+            #[inline]
+            fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+                self
             }
         }
     };
@@ -24,40 +44,81 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
     gen.into()
 }
 
+#[proc_macro_derive(Component)]
+pub fn derive_component(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+
+    let ident = input.ident;
+
+    let generics = input.generics;
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    let gen = quote! {
+        impl #impl_generics lemon_ecs::component::Component for #ident #ty_generics #where_clause {
+            #[inline]
+            fn get_storage(&self) -> Box<dyn lemon_ecs::collections::ComponentVec> {
+                Box::new(Vec::<#ident #ty_generics>::new())
+            }
+        }
+
+        lemon_ecs::macros::impl_as_any!(#ident #generics);
+    };
+
+    gen.into()
+}
+
+#[proc_macro_derive(Resource)]
+pub fn derive_resource(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+
+    let ident = input.ident;
+
+    let generics = input.generics;
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    let gen = quote! {
+        impl #impl_generics lemon_ecs::system::Resource for #ident #ty_generics #where_clause { }
+
+        lemon_ecs::macros::impl_as_any!(#ident #generics);
+    };
+
+    gen.into()
+}
+
 // A range with literal start and end values
-struct LiteralRange {
+struct TupleRange {
     start: usize,
     end: usize,
 }
 
-impl Parse for LiteralRange {
+impl Parse for TupleRange {
     fn parse(input: ParseStream) -> Result<Self> {
         let start = input.parse::<LitInt>()?.base10_parse::<usize>()?;
         input.parse::<Token![..]>()?;
 
         let end = input.parse::<LitInt>()?.base10_parse::<usize>()?;
-        Ok(LiteralRange { start, end })
+        Ok(TupleRange { start, end })
     }
 }
 
-struct MacroTuples {
+struct AllTuplesInput {
     ident: Ident,
-    range: LiteralRange,
+    range: TupleRange,
 }
 
-impl Parse for MacroTuples {
+impl Parse for AllTuplesInput {
     fn parse(input: ParseStream) -> Result<Self> {
         let ident = input.parse::<Ident>()?;
         input.parse::<Token![,]>()?;
 
-        let range = input.parse::<LiteralRange>()?;
-        Ok(MacroTuples { ident, range })
+        let range = input.parse::<TupleRange>()?;
+        Ok(AllTuplesInput { ident, range })
     }
 }
 
 #[proc_macro]
 pub fn all_tuples(input: TokenStream) -> TokenStream {
-    let MacroTuples { ident, range } = parse_macro_input!(input as MacroTuples);
+    let AllTuplesInput { ident, range } = parse_macro_input!(input as AllTuplesInput);
 
     let idents: Vec<Ident> = (0..range.end)
         .map(|i| format_ident!("T{}", i + 1))
@@ -80,7 +141,7 @@ pub fn all_tuples(input: TokenStream) -> TokenStream {
 
 #[proc_macro]
 pub fn impl_tuple_bundle(input: TokenStream) -> TokenStream {
-    let range = parse_macro_input!(input as LiteralRange);
+    let range = parse_macro_input!(input as TupleRange);
 
     let indices: Vec<Index> = (0..range.end).map(Index::from).collect();
 
@@ -154,13 +215,13 @@ fn impl_into_bundle<T: ToTokens>(
     gen.into()
 }
 
-#[proc_macro_derive(Bundleable)]
+#[proc_macro_derive(Bundle)]
 pub fn derive_into_bundle(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
 
     let fields = match ast.data {
         Data::Struct(DataStruct { fields, .. }) => fields,
-        _ => panic!("Only non-unit structs can derive Bundable"),
+        _ => panic!("Only non-unit structs can derive Bundle"),
     };
 
     match fields {
@@ -174,6 +235,6 @@ pub fn derive_into_bundle(input: TokenStream) -> TokenStream {
                 Index::from(idx)
             })
         }
-        Fields::Unit => panic!("Unit structs cannot derive Bundable"),
+        Fields::Unit => panic!("Unit structs cannot derive Bundle"),
     }
 }
