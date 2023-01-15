@@ -9,7 +9,8 @@ use std::{
 };
 
 use crate::{
-    component::{Component, ComponentChange},
+    changes::ComponentChange,
+    component::Component,
     entities::{Entity, EntityId},
     world::{World, WorldUpdate},
 };

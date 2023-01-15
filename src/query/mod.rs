@@ -1,8 +1,9 @@
 use std::{any::TypeId, collections::HashSet, marker::PhantomData};
 
 use crate::{
+    changes::ChangeRecord,
     collections::sparse_set,
-    component::{ChangeRecord, Component},
+    component::Component,
     entities::{
         archetype::{self, Archetype, Entity},
         EntityId,

@@ -1,8 +1,10 @@
 use std::{any::TypeId, cell::RefCell, collections::HashMap};
 
-use crate::{collections::SparseSet, component::ChangeRecord};
+use crate::{collections::SparseSet, entities::EntityId};
 
-use super::EntityId;
+mod record;
+
+pub use record::*;
 
 enum ChangeStatus {
     Processed,

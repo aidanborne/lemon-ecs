@@ -5,7 +5,8 @@ use std::{
 };
 
 use crate::{
-    component::{Bundle, Component, ComponentChange, TypeBundle},
+    changes::{Changes, ComponentChange},
+    component::{Bundle, Component, TypeBundle},
     entities::{Archetypes, Entities, EntityId},
     query::{Query, QueryChanged, QueryFetch, QueryFilter},
     system::Resource,
@@ -13,13 +14,10 @@ use crate::{
 };
 
 mod buffer;
-mod changes;
 mod updates;
 
 pub use buffer::*;
 pub(crate) use updates::*;
-
-use changes::Changes;
 
 #[derive(Default)]
 pub struct World {

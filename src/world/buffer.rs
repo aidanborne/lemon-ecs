@@ -1,7 +1,8 @@
 use std::mem::ManuallyDrop;
 
 use crate::{
-    component::{Bundle, ComponentChange, TypeBundle},
+    changes::ComponentChange,
+    component::{Bundle, TypeBundle},
     system::Resource,
     world::{EntityId, World, WorldUpdate},
 };

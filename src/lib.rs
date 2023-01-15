@@ -1,3 +1,4 @@
+pub mod changes;
 pub mod collections;
 pub mod component;
 pub mod engine;

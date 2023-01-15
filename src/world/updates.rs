@@ -1,9 +1,7 @@
 use std::any::Any;
 
 use crate::{
-    collections::SparseSet,
-    component::{Component, ComponentChange},
-    system::Resource,
+    changes::ComponentChange, collections::SparseSet, component::Component, system::Resource,
 };
 
 use super::{EntityId, World};

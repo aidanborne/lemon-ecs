@@ -1,6 +1,6 @@
 use std::any::TypeId;
 
-use super::Component;
+use crate::component::Component;
 
 pub enum ComponentChange {
     Added(Box<dyn Component>),
