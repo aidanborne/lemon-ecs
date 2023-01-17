@@ -1,8 +1,6 @@
-use std::any::Any;
-
 use crate::{
     component::Component,
-    traits::{AsAny, Downcast},
+    downcast::{impl_downcast, AsAny},
 };
 
 /// A trait for component vectors that allows for replacing and swapping components.
@@ -18,15 +16,7 @@ pub trait ComponentVec: AsAny {
     fn swap_remove(&mut self, idx: usize) -> Box<dyn Component>;
 }
 
-impl<T: 'static> AsAny for Vec<T> {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-}
+impl_downcast!(dyn ComponentVec);
 
 impl<T: 'static + Component> ComponentVec for Vec<T> {
     fn swap_replace(

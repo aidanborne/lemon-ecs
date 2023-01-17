@@ -1,6 +1,9 @@
 use std::ops::Deref;
 
-use crate::{traits::AsAny, world::World};
+use crate::{
+    downcast::{impl_downcast, AsAny},
+    world::World,
+};
 
 use super::params::SystemParameter;
 
@@ -9,6 +12,8 @@ pub trait Resource: AsAny {
     /// Called each time updates to the world are applied.
     fn update(&mut self) {}
 }
+
+impl_downcast!(dyn Resource);
 
 #[repr(transparent)]
 pub struct Res<'world, T: 'static>(&'world T);

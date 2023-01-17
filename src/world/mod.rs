@@ -10,7 +10,6 @@ use crate::{
     entities::{Archetypes, Entities, EntityId},
     query::{Query, QueryChanged, QueryFetch, QueryFilter},
     system::Resource,
-    traits::Downcast,
 };
 
 mod buffer;
@@ -52,7 +51,7 @@ impl World {
                     let type_id = (*component).as_any().type_id();
 
                     if let Some(record) = self.changes.get_record(id, type_id) {
-                        record.map_removed(component);
+                        record.map_removal(component);
                     }
                 }
 
@@ -91,7 +90,7 @@ impl World {
                     let removed = components.insert(type_id, component);
 
                     if let Some(record) = self.changes.get_record(id, type_id) {
-                        record.map_inserted(removed);
+                        record.map_insertion(removed);
                     }
                 }
                 ComponentChange::Removed(type_id) => {
@@ -99,7 +98,7 @@ impl World {
 
                     if let Some(component) = removed {
                         if let Some(record) = self.changes.get_record(id, type_id) {
-                            record.map_removed(component);
+                            record.map_removal(component);
                         }
                     }
                 }
@@ -135,7 +134,7 @@ impl World {
                             self.archetypes[archetype_idx].replace_component(id, component);
 
                         if let Some(record) = self.changes.get_record(id, type_id) {
-                            record.map_inserted(removed);
+                            record.map_insertion(removed);
                         }
                     } else {
                         consumed = Some(ComponentChange::Added(component));

@@ -1,10 +1,15 @@
 use std::{any::TypeId, cell::RefCell, collections::HashMap};
 
-use crate::{collections::SparseSet, entities::EntityId};
+use crate::{collections::SparseSet, component::Component, entities::EntityId};
 
 mod record;
 
 pub use record::*;
+
+pub enum ComponentChange {
+    Added(Box<dyn Component>),
+    Removed(TypeId),
+}
 
 enum ChangeStatus {
     Processed,

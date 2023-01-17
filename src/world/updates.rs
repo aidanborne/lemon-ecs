@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use crate::{
     changes::ComponentChange, collections::SparseSet, component::Component, system::Resource,
 };

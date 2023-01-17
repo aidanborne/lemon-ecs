@@ -82,7 +82,7 @@ impl Archetype {
         let type_id = TypeId::of::<T>();
 
         if let Some(component_storage) = self.components.get(&type_id) {
-            if let Some(components) = component_storage.as_any().downcast_ref::<Vec<T>>() {
+            if let Some(components) = component_storage.downcast_ref::<Vec<T>>() {
                 return components.get(loc.idx());
             }
         }

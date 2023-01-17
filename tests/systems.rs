@@ -2,7 +2,6 @@ use lemon_ecs::{engine::Engine, query::Query, system::Resource, world::WorldBuff
 
 mod common;
 use common::components::{Name, Position, Velocity};
-use lemon_ecs_macros::impl_as_any;
 
 fn print_system(buffer: WorldBuffer, query: Query<(&mut Position, &Velocity)>) {
     for (mut position, velocity) in query {
@@ -63,8 +62,6 @@ impl Resource for Counter {
         self.increment();
     }
 }
-
-impl_as_any!(Counter);
 
 #[test]
 pub fn engine_resource() {

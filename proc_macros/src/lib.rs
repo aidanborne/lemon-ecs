@@ -6,44 +6,6 @@ use syn::{
     *,
 };
 
-struct AsAnyInput {
-    ident: Ident,
-    generics: Generics,
-}
-
-impl Parse for AsAnyInput {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let ident = input.parse::<Ident>()?;
-        let generics = input.parse::<Generics>()?;
-        Ok(AsAnyInput { ident, generics })
-    }
-}
-
-#[proc_macro]
-pub fn impl_as_any(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as AsAnyInput);
-    let ident = input.ident;
-    let generics = input.generics;
-
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-
-    let gen = quote! {
-        impl #impl_generics lemon_ecs::traits::AsAny for #ident #ty_generics #where_clause {
-            #[inline]
-            fn as_any(&self) -> &dyn std::any::Any {
-                self
-            }
-
-            #[inline]
-            fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-                self
-            }
-        }
-    };
-
-    gen.into()
-}
-
 #[proc_macro_derive(Component)]
 pub fn derive_component(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -60,8 +22,6 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
                 Box::new(Vec::<#ident #ty_generics>::new())
             }
         }
-
-        lemon_ecs::macros::impl_as_any!(#ident #generics);
     };
 
     gen.into()
@@ -78,8 +38,6 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
 
     let gen = quote! {
         impl #impl_generics lemon_ecs::system::Resource for #ident #ty_generics #where_clause { }
-
-        lemon_ecs::macros::impl_as_any!(#ident #generics);
     };
 
     gen.into()
