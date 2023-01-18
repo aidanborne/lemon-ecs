@@ -1,17 +1,18 @@
-use lemon_ecs::{engine::Engine, query::Query, system::Resource, world::WorldBuffer};
+use lemon_ecs::{
+    engine::Engine,
+    world::{World, WorldBuffer},
+};
 
 mod common;
 use common::components::{Name, Position, Velocity};
 
-fn print_system(buffer: WorldBuffer, query: Query<(&mut Position, &Velocity)>) {
-    for (mut position, velocity) in query {
+fn print_system(world: &mut World) {
+    for (mut position, velocity) in world.query::<(&mut Position, &Velocity), ()>() {
         let position = &mut *position;
         position.0 += velocity.0;
         position.1 += velocity.1;
 
-        buffer
-            .spawn(Name("Hello".to_string()))
-            .insert(Velocity(3, 4));
+        WorldBuffer::new(world).spawn((Name("Hello".to_string()), Velocity(3, 4)));
     }
 }
 
@@ -57,19 +58,15 @@ impl Counter {
     }
 }
 
-impl Resource for Counter {
-    fn update(&mut self) {
-        self.increment();
-    }
-}
-
 #[test]
 pub fn engine_resource() {
     let mut engine = Engine::new();
     engine.insert_resource(Counter::new());
 
     for _ in 0..15 {
-        engine.update();
+        if let Some(counter) = engine.get_resource_mut::<Counter>() {
+            counter.increment();
+        }
     }
 
     let counter = engine.get_resource::<Counter>();

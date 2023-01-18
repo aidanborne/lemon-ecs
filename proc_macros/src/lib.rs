@@ -27,22 +27,6 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
     gen.into()
 }
 
-#[proc_macro_derive(Resource)]
-pub fn derive_resource(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-
-    let ident = input.ident;
-
-    let generics = input.generics;
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-
-    let gen = quote! {
-        impl #impl_generics lemon_ecs::system::Resource for #ident #ty_generics #where_clause { }
-    };
-
-    gen.into()
-}
-
 // A range with literal start and end values
 struct TupleRange {
     start: usize,

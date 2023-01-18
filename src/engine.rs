@@ -1,41 +1,28 @@
 use std::ops::{Deref, DerefMut};
 
-use crate::{
-    system::{IntoSystem, System},
-    world::World,
-};
+use crate::{system::System, world::World};
 
+#[derive(Default)]
 pub struct Engine {
     world: World,
     systems: Vec<Box<dyn System>>,
 }
 
 impl Engine {
-    pub fn new() -> Self {
-        Self {
-            world: World::default(),
-            systems: Vec::new(),
-        }
+    /// Adds a system to the engine.
+    /// This is typically a function that takes a mutable reference to the world.
+    #[inline]
+    pub fn add_system(&mut self, system: impl System + 'static) {
+        self.systems.push(Box::new(system));
     }
 
-    /// Add a system to the engine.
-    pub fn add_system<T>(&mut self, system: impl IntoSystem<T>) {
-        self.systems.push(system.into_system());
-    }
-
-    /// Update the engine.
+    /// Updates the engine by running all systems in order.
     pub fn update(&mut self) {
-        for system in self.systems.iter() {
-            system.update(&self.world);
+        for system in self.systems.iter_mut() {
+            system.update(&mut self.world);
         }
 
         self.world.process_updates();
-    }
-}
-
-impl Default for Engine {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

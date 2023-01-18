@@ -10,5 +10,5 @@ pub mod world;
 mod downcast;
 
 pub mod macros {
-    pub use lemon_ecs_macros::{Bundle, Component, Resource};
+    pub use lemon_ecs_macros::{Bundle, Component};
 }

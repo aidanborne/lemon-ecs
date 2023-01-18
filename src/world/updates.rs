@@ -1,6 +1,6 @@
-use crate::{
-    changes::ComponentChange, collections::SparseSet, component::Component, system::Resource,
-};
+use std::any::Any;
+
+use crate::{changes::ComponentChange, collections::SparseSet, component::Component};
 
 use super::{EntityId, World};
 
@@ -8,7 +8,7 @@ pub enum WorldUpdate {
     SpawnEntity(Vec<Box<dyn Component>>),
     DespawnEntity(EntityId),
     ModifyEntity(EntityId, Vec<ComponentChange>),
-    InsertResource(Box<dyn Resource>),
+    InsertResource(Box<dyn Any>),
 }
 
 impl WorldUpdate {

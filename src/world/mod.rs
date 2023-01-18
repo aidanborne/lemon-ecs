@@ -1,5 +1,5 @@
 use std::{
-    any::TypeId,
+    any::{Any, TypeId},
     cell::RefCell,
     collections::{HashMap, HashSet},
 };
@@ -9,7 +9,6 @@ use crate::{
     component::{Bundle, Component, TypeBundle},
     entities::{Archetypes, Entities, EntityId},
     query::{Query, QueryChanged, QueryFetch, QueryFilter},
-    system::Resource,
 };
 
 mod buffer;
@@ -23,7 +22,7 @@ pub struct World {
     entities: Entities,
     archetypes: Archetypes,
     updates: RefCell<Vec<WorldUpdate>>,
-    resources: HashMap<TypeId, Box<dyn Resource>>,
+    resources: HashMap<TypeId, Box<dyn Any>>,
     changes: ChangeDetection,
     despawned: Vec<EntityId>,
 }
@@ -179,19 +178,19 @@ impl World {
         QueryChanged::new(self, record)
     }
 
-    pub fn get_resource<T: 'static + Resource>(&self) -> Option<&T> {
+    pub fn get_resource<T: 'static>(&self) -> Option<&T> {
         self.resources
             .get(&TypeId::of::<T>())
             .map(|resource| resource.downcast_ref::<T>().unwrap())
     }
 
-    pub fn get_resource_mut<T: 'static + Resource>(&mut self) -> Option<&mut T> {
+    pub fn get_resource_mut<T: 'static>(&mut self) -> Option<&mut T> {
         self.resources
             .get_mut(&TypeId::of::<T>())
             .map(|resource| resource.downcast_mut::<T>().unwrap())
     }
 
-    pub fn insert_resource<T: 'static + Resource>(&mut self, resource: T) {
+    pub fn insert_resource<T: 'static>(&mut self, resource: T) {
         self.resources.insert(TypeId::of::<T>(), Box::new(resource));
     }
 
@@ -207,10 +206,6 @@ impl World {
                 true
             }
         });
-
-        for resource in self.resources.values_mut() {
-            resource.update();
-        }
     }
 
     pub(crate) fn push_update(&self, update: WorldUpdate) {
