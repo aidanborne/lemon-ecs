@@ -1,10 +1,10 @@
 use std::ops::Deref;
 
-pub mod archetype;
-pub mod archetypes;
+mod archetype;
+mod archetypes;
 
-pub use archetype::{Archetype, Entity};
-pub(crate) use archetypes::Archetypes;
+pub use archetype::*;
+pub use archetypes::*;
 
 pub(crate) struct Entities {
     available_ids: Vec<usize>,

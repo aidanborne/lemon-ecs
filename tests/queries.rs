@@ -9,13 +9,13 @@ pub fn query_no_filters() {
 
     world.spawn(Position(1, 2));
 
-    let mut query = world.query::<&Position, ()>();
+    let mut query = world.query::<Position>().into_iter();
 
     let position = query.next().unwrap();
     assert_eq!(position, &Position(1, 2), "Position should be (1, 2)");
     assert!(query.next().is_none(), "Query should be empty");
 
-    let mut query = world.query::<(&Position, &Velocity), ()>();
+    let mut query = world.query::<(Position, Velocity)>().into_iter();
     assert!(query.next().is_none(), "Query should be empty");
 }
 
@@ -25,13 +25,13 @@ pub fn query_filters() {
 
     let _entity = world.spawn((Position(1, 2), Velocity(3, 4)));
 
-    let mut query = world.query::<&Position, ()>();
+    let mut query = world.query::<Position>().into_iter();
 
     let position = query.next().unwrap();
     assert_eq!(position, &Position(1, 2), "Position should be (1, 2)");
     assert!(query.next().is_none(), "Query should be empty");
 
-    let mut query = world.query::<&Position, Without<Velocity>>();
+    let mut query = world.query::<Position>().filter::<Without<Velocity>>();
     assert!(query.next().is_none(), "Query should be empty");
 }
 

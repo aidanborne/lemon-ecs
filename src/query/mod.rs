@@ -2,71 +2,59 @@ use std::{any::TypeId, collections::HashSet, marker::PhantomData};
 
 use crate::{
     changes::{ChangeRecord, ChangeStatus},
-    collections::sparse_set,
+    collections::sparse_set::{self, SparseSet},
     component::Component,
-    entities::{
-        archetype::{self, Archetype, Entity},
-        EntityId,
-    },
+    entities::EntityId,
     world::World,
 };
 
-mod fetch;
+use lemon_ecs_macros::all_tuples;
+
 mod filter;
+mod iter;
+mod retriever;
 
-pub use fetch::QueryFetch;
-pub use filter::QueryFilter;
-pub use filter::{With, Without};
-use sparse_set::SparseSet;
+pub use filter::Without;
+pub use retriever::QueryRetriever;
 
-pub struct Query<'world, Fetch: QueryFetch, Filter: QueryFilter = ()> {
-    world: &'world World,
-    archetypes: std::vec::IntoIter<&'world Archetype>,
-    entities: Option<archetype::Iter<'world>>,
-    _fetch: PhantomData<Fetch>,
-    _filter: PhantomData<Filter>,
+pub use self::iter::*;
+
+pub trait QuerySelector: 'static {
+    /// Returns true if the query should be run for the given archetype.
+    fn filter(type_ids: &HashSet<TypeId>) -> bool;
 }
 
-impl<'world, Fetch: QueryFetch, Filter: QueryFilter> Query<'world, Fetch, Filter> {
-    pub fn new(world: &'world World, archetypes: std::vec::IntoIter<&'world Archetype>) -> Self {
-        Self {
-            world,
-            archetypes,
-            entities: None,
-            _fetch: PhantomData,
-            _filter: PhantomData,
-        }
-    }
-
-    fn next_entity(&mut self) -> Option<Entity<'world>> {
-        loop {
-            if let Some(entities) = &mut self.entities {
-                let entity = entities.next();
-
-                if entity.is_some() {
-                    return entity;
-                }
-            }
-
-            if let Some(archetype) = self.archetypes.next() {
-                self.entities = Some(archetype.iter());
-            } else {
-                return None;
+macro_rules! impl_tuple_selector {
+    ($($t:ident),*) => {
+        impl<$($t: QuerySelector),*> QuerySelector for ($($t,)*) {
+            fn filter(_type_ids: &HashSet<TypeId>) -> bool {
+                $($t::filter(_type_ids) &&)* true
             }
         }
+    };
+  }
+
+all_tuples!(impl_tuple_selector, 0..16);
+
+pub struct Query<'world, T: QueryRetriever>(&'world mut World, PhantomData<T>);
+
+impl<'world, T: QueryRetriever> Query<'world, T> {
+    pub fn new(world: &'world mut World) -> Self {
+        Self(world, PhantomData)
     }
 
-    pub fn should_query(type_ids: &HashSet<TypeId>) -> bool {
-        Fetch::should_fetch(type_ids) && Filter::filter(type_ids)
+    #[inline]
+    pub fn filter<Q: QuerySelector>(self) -> QueryIter<'world, T> {
+        QueryIter::new(self.0.query_selector::<(T, Q)>())
     }
 }
 
-impl<'world, Fetch: QueryFetch, Filter: QueryFilter> Iterator for Query<'world, Fetch, Filter> {
-    type Item = Fetch::Output<'world>;
+impl<'world, T: QueryRetriever> IntoIterator for Query<'world, T> {
+    type Item = T::Output<'world>;
+    type IntoIter = QueryIter<'world, T>;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        self.next_entity()
-            .map(|entity| Fetch::fetch(self.world, &entity))
+    fn into_iter(self) -> Self::IntoIter {
+        QueryIter::new(self.0.query_selector::<T>())
     }
 }
 

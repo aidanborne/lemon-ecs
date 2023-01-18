@@ -7,7 +7,7 @@ use crate::{
 
 use super::EntityId;
 
-pub struct Archetype {
+pub(crate) struct Archetype {
     entities: SparseSet<PhantomData<bool>>,
     components: HashMap<TypeId, Box<dyn ComponentVec>>,
 }
@@ -104,8 +104,8 @@ impl Archetype {
         self.components.keys().cloned().collect()
     }
 
-    pub fn iter(&self) -> Iter<'_> {
-        Iter::new(self)
+    pub fn iter(&self) -> ArchetypeIter<'_> {
+        ArchetypeIter::new(self)
     }
 }
 
@@ -130,24 +130,8 @@ pub struct Entity<'archetype> {
 }
 
 impl<'archetype> Entity<'archetype> {
-    pub fn new(id: EntityId, archetype: &'archetype Archetype, location: EntityLocation) -> Self {
-        Self {
-            id,
-            archetype,
-            location,
-        }
-    }
-
     pub fn id(&self) -> EntityId {
         self.id
-    }
-
-    pub fn archetype(&self) -> &'archetype Archetype {
-        self.archetype
-    }
-
-    pub fn location(&self) -> EntityLocation {
-        self.location
     }
 
     pub fn get_component<T: 'static + Component>(&self) -> Option<&'archetype T> {
@@ -155,12 +139,12 @@ impl<'archetype> Entity<'archetype> {
     }
 }
 
-pub struct Iter<'archetype> {
+pub(crate) struct ArchetypeIter<'archetype> {
     entities: Enumerate<sparse_set::Iter<'archetype, PhantomData<bool>>>,
     archetype: &'archetype Archetype,
 }
 
-impl<'archetype> Iter<'archetype> {
+impl<'archetype> ArchetypeIter<'archetype> {
     pub fn new(archetype: &'archetype Archetype) -> Self {
         Self {
             entities: archetype.entities.iter().enumerate(),
@@ -169,16 +153,16 @@ impl<'archetype> Iter<'archetype> {
     }
 }
 
-impl<'archetype> Iterator for Iter<'archetype> {
+impl<'archetype> Iterator for ArchetypeIter<'archetype> {
     type Item = Entity<'archetype>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some((idx, (id, _))) = self.entities.next() {
-            Some(Entity::new(
-                EntityId::new(*id),
-                self.archetype,
-                EntityLocation::new(idx),
-            ))
+            Some(Entity {
+                id: (*id).into(),
+                archetype: self.archetype,
+                location: EntityLocation::new(idx),
+            })
         } else {
             None
         }

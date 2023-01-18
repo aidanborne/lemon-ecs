@@ -7,8 +7,8 @@ use std::{
 use crate::{
     changes::{ChangeDetection, ComponentChange},
     component::{Bundle, Component, TypeBundle},
-    entities::{Archetypes, Entities, EntityId},
-    query::{Query, QueryChanged, QueryFetch, QueryFilter},
+    entities::{Archetypes, Entities, EntityId, EntityIter},
+    query::{Query, QueryChanged, QueryRetriever, QuerySelector},
 };
 
 mod buffer;
@@ -103,14 +103,14 @@ impl World {
     }
 
     fn modify_entity(&mut self, id: EntityId, mut changes: impl Iterator<Item = ComponentChange>) {
-        let archetype_idx = self.archetypes.entity_archetype_idx(id);
+        let archetype = self.archetypes.entity_archetype_mut(id);
 
-        if archetype_idx.is_none() {
+        if archetype.is_none() {
             return;
         }
 
-        let archetype_idx = archetype_idx.unwrap();
-        let hash_set: HashSet<TypeId> = self.archetypes[archetype_idx].type_ids();
+        let archetype = archetype.unwrap();
+        let hash_set: HashSet<TypeId> = archetype.type_ids(); //self.archetypes[archetype_idx].type_ids();
 
         let mut consumed = None;
 
@@ -120,8 +120,7 @@ impl World {
                     let type_id = (*component).as_any().type_id();
 
                     if hash_set.contains(&type_id) {
-                        let changed =
-                            self.archetypes[archetype_idx].replace_component(id, component);
+                        let changed = archetype.replace_component(id, component);
 
                         self.changes.mark_changed(id, changed);
                     } else {
@@ -139,7 +138,7 @@ impl World {
         }
 
         if let Some(consumed) = consumed {
-            let bundle = self.archetypes[archetype_idx].remove(id).unwrap();
+            let bundle = archetype.remove(id).unwrap();
             self.modify_bundle(id, bundle, std::iter::once(consumed).chain(changes));
         }
     }
@@ -163,13 +162,18 @@ impl World {
             .and_then(|archetype| archetype.get_component::<T>(id))
     }
 
-    pub fn query<Fetch, Filter>(&self) -> Query<Fetch, Filter>
+    pub fn query<T>(&mut self) -> Query<T>
     where
-        Fetch: 'static + QueryFetch,
-        Filter: 'static + QueryFilter,
+        T: 'static + QueryRetriever,
     {
-        let archetypes = self.archetypes.query_archetypes::<Fetch, Filter>();
-        Query::new(self, archetypes)
+        Query::new(self)
+    }
+
+    pub fn query_selector<T>(&mut self) -> EntityIter
+    where
+        T: 'static + QuerySelector,
+    {
+        self.archetypes.query_entities::<T>()
     }
 
     /// Returns a `QueryChanged` iterator for the given component type.
