@@ -13,7 +13,7 @@ pub struct Engine {
 impl Engine {
     pub fn new() -> Self {
         Self {
-            world: World::new(),
+            world: World::default(),
             systems: Vec::new(),
         }
     }

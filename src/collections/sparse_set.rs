@@ -161,6 +161,8 @@ impl<'a, T> Iterator for Values<'a, T> {
     }
 }
 
+//pub type IntoIter<T> = std::vec::IntoIter<(usize, T)>;
+
 impl<T> IntoIterator for SparseSet<T> {
     type Item = (usize, T);
     type IntoIter = std::vec::IntoIter<Self::Item>;

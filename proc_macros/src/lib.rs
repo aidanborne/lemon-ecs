@@ -18,7 +18,7 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
     let gen = quote! {
         impl #impl_generics lemon_ecs::component::Component for #ident #ty_generics #where_clause {
             #[inline]
-            fn get_storage(&self) -> Box<dyn lemon_ecs::collections::ComponentVec> {
+            fn as_empty_vec(&self) -> Box<dyn lemon_ecs::collections::ComponentVec> {
                 Box::new(Vec::<#ident #ty_generics>::new())
             }
         }

@@ -17,7 +17,7 @@ impl Archetype {
         let mut hash_map = HashMap::new();
 
         for component in components.iter() {
-            hash_map.insert(component.as_any().type_id(), component.get_storage());
+            hash_map.insert(component.as_any().type_id(), component.as_empty_vec());
         }
 
         Self {
@@ -26,18 +26,20 @@ impl Archetype {
         }
     }
 
+    /// Replaces the component of type `T` with the given component.
     pub fn replace_component(
         &mut self,
         id: EntityId,
         component: Box<dyn Component>,
-    ) -> Option<Box<dyn Component>> {
+    ) -> Box<dyn Component> {
         if let Some(idx) = self.entities.index_of(*id) {
-            if let Some(storage) = self.components.get_mut(&component.as_any().type_id()) {
-                return storage.swap_replace(idx, component);
-            }
+            self.components
+                .get_mut(&component.as_any().type_id())
+                .and_then(|components| components.replace(idx, component))
+                .unwrap_or_else(|| panic!("Entity did not have the given component."))
+        } else {
+            panic!("Entity does not exist in this archetype.")
         }
-
-        None
     }
 
     pub fn insert(&mut self, id: EntityId, components: Vec<Box<dyn Component>>) {
@@ -49,7 +51,7 @@ impl Archetype {
 
         for component in components {
             if let Some(storage) = self.components.get_mut(&component.as_any().type_id()) {
-                storage.swap_replace(dense_idx, component);
+                storage.replace(dense_idx, component);
             }
         }
     }
@@ -78,12 +80,12 @@ impl Archetype {
     }
 
     /// Returns a reference to the component of type `T` at the given dense index.
-    pub fn get_component_dense<T: 'static + Component>(&self, loc: EntityLocation) -> Option<&T> {
+    pub fn get_dense_component<T: 'static + Component>(&self, loc: EntityLocation) -> Option<&T> {
         let type_id = TypeId::of::<T>();
 
-        if let Some(component_storage) = self.components.get(&type_id) {
-            if let Some(components) = component_storage.downcast_ref::<Vec<T>>() {
-                return components.get(loc.idx());
+        if let Some(boxed_components) = self.components.get(&type_id) {
+            if let Some(components) = boxed_components.downcast_ref::<Vec<T>>() {
+                return components.as_slice().get(loc.idx());
             }
         }
 
@@ -92,7 +94,7 @@ impl Archetype {
 
     pub fn get_component<T: 'static + Component>(&self, id: EntityId) -> Option<&T> {
         if let Some(idx) = self.entities.index_of(*id) {
-            return self.get_component_dense::<T>(EntityLocation::new(idx));
+            return self.get_dense_component::<T>(EntityLocation::new(idx));
         }
 
         None
@@ -149,7 +151,7 @@ impl<'archetype> Entity<'archetype> {
     }
 
     pub fn get_component<T: 'static + Component>(&self) -> Option<&'archetype T> {
-        self.archetype.get_component_dense::<T>(self.location)
+        self.archetype.get_dense_component::<T>(self.location)
     }
 }
 

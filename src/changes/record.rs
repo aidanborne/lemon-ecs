@@ -1,70 +1,97 @@
-use crate::component::Component;
+use crate::{
+    collections::{ComponentVec, SparseSet},
+    component::Component,
+    entities::EntityId,
+};
 
-#[derive(Default)]
-pub enum ChangeRecord {
-    /// The component was changed.
-    Changed(Box<dyn Component>),
-    /// The component was removed.
-    Removed(Box<dyn Component>),
-    /// The component was added.
+pub(crate) enum ChangeStatus {
     Added,
-    /// The component was not changed.
-    #[default]
-    Unchanged,
+    Modified(usize),
+    Removed(usize),
+}
+
+/// Records changes to a specific component type.
+/// Although it is untyped, it is only usable for a single component type.
+pub(crate) struct ChangeRecord {
+    pub entities: SparseSet<ChangeStatus>,
+    pub removed: Box<dyn ComponentVec>,
 }
 
 impl ChangeRecord {
-    pub fn map_insertion(&mut self, replaced: Option<Box<dyn Component>>) {
-        let old_record = std::mem::replace(self, ChangeRecord::Unchanged);
+    /*pub fn from_component(component: &dyn Component) -> Self {
+        Self {
+            entities: SparseSet::new(),
+            removed: component.as_empty_vec(),
+        }
+    }*/
 
-        *self = match old_record {
-            ChangeRecord::Removed(original) => {
-                assert!(replaced.is_none(), "Cannot replace a removed component");
-                ChangeRecord::Changed(original)
+    #[inline]
+    pub fn from_type<T: 'static + Component>() -> Self {
+        Self {
+            entities: SparseSet::new(),
+            removed: Box::new(Vec::<T>::new()),
+        }
+    }
+
+    /// Marks the component as added for the given entity.
+    pub fn mark_added(&mut self, id: EntityId) {
+        match self.entities.get_mut(*id) {
+            Some(status) => match status {
+                ChangeStatus::Removed(id) => *status = ChangeStatus::Modified(*id),
+                _ => panic!("Cannot add a component that was already added."),
+            },
+            None => {
+                self.entities.insert(*id, ChangeStatus::Added);
             }
-            ChangeRecord::Unchanged => {
-                if let Some(original) = replaced {
-                    // Component must have been replaced because it was present
-                    ChangeRecord::Changed(original)
-                } else {
-                    ChangeRecord::Added
+        }
+    }
+
+    /// Marks the component as removed for the given entity.
+    pub fn mark_removed(&mut self, id: EntityId, removed: Box<dyn Component>) {
+        match self.entities.get_mut(*id) {
+            Some(status) => match status {
+                ChangeStatus::Added => {
+                    self.entities.remove(*id);
                 }
+                ChangeStatus::Modified(id) => {
+                    self.removed.replace(*id, removed);
+                    *status = ChangeStatus::Removed(*id);
+                }
+                ChangeStatus::Removed(_) => {
+                    panic!("Cannot remove a component that was already removed")
+                }
+            },
+            None => {
+                self.entities
+                    .insert(*id, ChangeStatus::Removed(self.removed.push(removed)));
             }
-            _ => old_record,
         }
     }
 
-    pub fn map_removal(&mut self, removed: Box<dyn Component>) {
-        let old_record = std::mem::replace(self, ChangeRecord::Unchanged);
-
-        *self = match old_record {
-            ChangeRecord::Changed(original) => ChangeRecord::Removed(original),
-            ChangeRecord::Removed(_) => old_record,
-            ChangeRecord::Added => ChangeRecord::Unchanged,
-            ChangeRecord::Unchanged => ChangeRecord::Removed(removed),
+    /// Marks the component as changed for the given entity.
+    pub fn mark_changed(&mut self, id: EntityId, removed: Box<dyn Component>) {
+        match self.entities.get_mut(*id) {
+            Some(status) => match status {
+                ChangeStatus::Added | ChangeStatus::Modified(_) => {}
+                ChangeStatus::Removed(_) => {
+                    panic!("Cannot change a component that was already removed")
+                }
+            },
+            None => {
+                self.entities
+                    .insert(*id, ChangeStatus::Modified(self.removed.push(removed)));
+            }
         }
     }
 
-    pub fn is_added(&self) -> bool {
-        matches!(self, ChangeRecord::Added)
+    pub fn contains(&self, id: EntityId) -> bool {
+        self.entities.contains(*id)
     }
 
-    pub fn is_changed(&self) -> bool {
-        matches!(self, ChangeRecord::Changed(_))
-    }
-
-    pub fn is_removed(&self) -> bool {
-        matches!(self, ChangeRecord::Removed(_))
-    }
-
-    pub fn is_no_change(&self) -> bool {
-        matches!(self, ChangeRecord::Unchanged)
-    }
-
-    pub fn get_removed(&self) -> Option<&dyn Component> {
-        match self {
-            ChangeRecord::Changed(original) | ChangeRecord::Removed(original) => Some(&**original),
-            _ => None,
+    pub fn clone_empty(&self) -> Self {
+        Self {
+            entities: SparseSet::new(),
+            removed: self.removed.clone_empty(),
         }
     }
 }

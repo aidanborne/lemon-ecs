@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    changes::{Changes, ComponentChange},
+    changes::{ChangeDetection, ComponentChange},
     component::{Bundle, Component, TypeBundle},
     entities::{Archetypes, Entities, EntityId},
     query::{Query, QueryChanged, QueryFetch, QueryFilter},
@@ -24,15 +24,11 @@ pub struct World {
     archetypes: Archetypes,
     updates: RefCell<Vec<WorldUpdate>>,
     resources: HashMap<TypeId, Box<dyn Resource>>,
-    changes: Changes,
+    changes: ChangeDetection,
     despawned: Vec<EntityId>,
 }
 
 impl World {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn spawn(&mut self, components: impl Bundle) -> EntityId {
         let id = self.entities.spawn().into();
 
@@ -48,17 +44,13 @@ impl World {
         if let Some(archetype) = self.archetypes.entity_archetype_mut(id) {
             if let Some(components) = archetype.remove(id) {
                 for component in components {
-                    let type_id = (*component).as_any().type_id();
-
-                    if let Some(record) = self.changes.get_record(id, type_id) {
-                        record.map_removal(component);
-                    }
+                    self.changes.mark_removed(id, component);
                 }
 
-                if self.changes.is_processed(id) {
-                    self.entities.despawn(*id);
-                } else {
+                if !self.changes.contains(id) {
                     self.despawned.push(id);
+                } else {
+                    self.entities.despawn(*id);
                 }
             } else {
                 self.entities.despawn(*id);
@@ -87,19 +79,18 @@ impl World {
             match change {
                 ComponentChange::Added(component) => {
                     let type_id = (*component).as_any().type_id();
-                    let removed = components.insert(type_id, component);
 
-                    if let Some(record) = self.changes.get_record(id, type_id) {
-                        record.map_insertion(removed);
+                    if let Some(changed) = components.insert(type_id, component) {
+                        self.changes.mark_changed(id, changed);
+                    } else {
+                        self.changes.mark_added(id, type_id);
                     }
                 }
                 ComponentChange::Removed(type_id) => {
                     let removed = components.remove(&type_id);
 
                     if let Some(component) = removed {
-                        if let Some(record) = self.changes.get_record(id, type_id) {
-                            record.map_removal(component);
-                        }
+                        self.changes.mark_removed(id, component);
                     }
                 }
             }
@@ -130,12 +121,10 @@ impl World {
                     let type_id = (*component).as_any().type_id();
 
                     if hash_set.contains(&type_id) {
-                        let removed =
+                        let changed =
                             self.archetypes[archetype_idx].replace_component(id, component);
 
-                        if let Some(record) = self.changes.get_record(id, type_id) {
-                            record.map_insertion(removed);
-                        }
+                        self.changes.mark_changed(id, changed);
                     } else {
                         consumed = Some(ComponentChange::Added(component));
                         break;
@@ -185,9 +174,9 @@ impl World {
     }
 
     /// Returns a `QueryChanged` iterator for the given component type.
-    pub fn query_changed<T: 'static + Component>(&self) -> QueryChanged<T> {
-        let sparse_set = self.changes.get_sparse_set(TypeId::of::<T>());
-        QueryChanged::new(self, sparse_set.iter())
+    pub fn query_changed<T: 'static + Component>(&mut self) -> QueryChanged<T> {
+        let record = self.changes.consume_record::<T>();
+        QueryChanged::new(self, record)
     }
 
     pub fn get_resource<T: 'static + Resource>(&self) -> Option<&T> {
@@ -210,10 +199,8 @@ impl World {
         let updates = std::mem::take(&mut *self.updates.borrow_mut());
         WorldUpdate::process(self, updates);
 
-        self.changes.clear_processed();
-
         self.despawned.retain(|&id| {
-            if self.changes.is_processed(id) {
+            if self.changes.contains(id) {
                 self.entities.despawn(*id);
                 false
             } else {

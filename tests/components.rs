@@ -5,7 +5,7 @@ use common::components::{Position, Velocity};
 
 #[test]
 pub fn get_component() {
-    let mut world = World::new();
+    let mut world = World::default();
 
     let entity = world.spawn(Position(1, 2));
 

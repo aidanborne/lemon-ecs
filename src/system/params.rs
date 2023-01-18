@@ -1,6 +1,5 @@
 use crate::{
-    component::Component,
-    query::{Query, QueryChanged, QueryFetch, QueryFilter},
+    query::{Query, QueryFetch, QueryFilter},
     world::{World, WorldBuffer},
 };
 
@@ -20,13 +19,13 @@ impl<Fetch: 'static + QueryFetch, Filter: 'static + QueryFilter> SystemParameter
     }
 }
 
-impl<T: 'static + Component> SystemParameter for QueryChanged<'_, T> {
+/*impl<T: 'static + Component> SystemParameter for QueryChanged<'_, T> {
     type Output<'world> = QueryChanged<'world, T>;
 
     fn resolve(world: &World) -> Self::Output<'_> {
         world.query_changed::<T>()
     }
-}
+}*/
 
 impl SystemParameter for &'_ World {
     type Output<'world> = &'world World;

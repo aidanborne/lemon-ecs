@@ -1,7 +1,7 @@
 use std::{any::TypeId, collections::HashSet, marker::PhantomData};
 
 use crate::{
-    changes::ChangeRecord,
+    changes::{ChangeRecord, ChangeStatus},
     collections::sparse_set,
     component::Component,
     entities::{
@@ -17,6 +17,7 @@ mod filter;
 pub use fetch::QueryFetch;
 pub use filter::QueryFilter;
 pub use filter::{With, Without};
+use sparse_set::SparseSet;
 
 pub struct Query<'world, Fetch: QueryFetch, Filter: QueryFilter = ()> {
     world: &'world World,
@@ -69,50 +70,32 @@ impl<'world, Fetch: QueryFetch, Filter: QueryFilter> Iterator for Query<'world, 
     }
 }
 
-pub struct EntityChange<'world, T: Component> {
-    world: &'world World,
-    record: &'world ChangeRecord,
-    id: EntityId,
-    _marker: PhantomData<T>,
+enum ComponentChanged<'world, 'query, T: Component> {
+    New(&'world World),
+    Old(&'query T),
+    Both(&'world World, &'query T),
 }
 
-impl<'world, T: Component> EntityChange<'world, T> {
-    pub fn new(world: &'world World, id: EntityId, record: &'world ChangeRecord) -> Self {
-        Self {
-            world,
-            record,
-            id,
-            _marker: PhantomData,
+pub struct EntityChanged<'world, 'query, T: Component> {
+    id: EntityId,
+    component: ComponentChanged<'world, 'query, T>,
+}
+
+impl<'world, 'query, T: Component> EntityChanged<'world, 'query, T> {
+    pub fn get_new(&self) -> Option<&'world T> {
+        match &self.component {
+            ComponentChanged::New(world) | ComponentChanged::Both(world, _) => {
+                world.get_component(self.id)
+            }
+            _ => None,
         }
     }
 
-    #[inline]
-    pub fn is_added(&self) -> bool {
-        self.record.is_added()
-    }
-
-    #[inline]
-    pub fn is_changed(&self) -> bool {
-        self.record.is_changed()
-    }
-
-    #[inline]
-    pub fn is_removed(&self) -> bool {
-        self.record.is_removed()
-    }
-
-    pub fn current(&self) -> Option<&'world T> {
-        if self.record.is_added() || self.record.is_changed() {
-            self.world.get_component(self.id)
-        } else {
-            None
+    pub fn get_old(&self) -> Option<&T> {
+        match &self.component {
+            ComponentChanged::Old(old) | ComponentChanged::Both(_, old) => Some(old),
+            _ => None,
         }
-    }
-
-    pub fn removed(&self) -> Option<&T> {
-        self.record
-            .get_removed()
-            .and_then(|removed| removed.as_any().downcast_ref::<T>())
     }
 
     #[inline]
@@ -123,32 +106,57 @@ impl<'world, T: Component> EntityChange<'world, T> {
 
 pub struct QueryChanged<'world, T: Component> {
     world: &'world World,
-    iter: sparse_set::Iter<'world, ChangeRecord>,
-    _marker: PhantomData<T>,
+    entities: SparseSet<ChangeStatus>,
+    removed: Vec<T>,
 }
 
 impl<'world, T: Component> QueryChanged<'world, T> {
-    pub fn new(world: &'world World, iter: sparse_set::Iter<'world, ChangeRecord>) -> Self {
+    pub(crate) fn new(world: &'world World, record: ChangeRecord) -> Self {
         Self {
             world,
-            iter,
-            _marker: PhantomData,
+            entities: record.entities,
+            removed: *record.removed.downcast().ok().unwrap(),
         }
     }
 }
 
-impl<'world, T: Component> Iterator for QueryChanged<'world, T> {
-    type Item = EntityChange<'world, T>;
+impl<'world, 'query, T: Component> IntoIterator for &'query QueryChanged<'world, T> {
+    type Item = EntityChanged<'world, 'query, T>;
+    type IntoIter = QueryChangedIter<'world, 'query, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        QueryChangedIter {
+            iter: self.entities.iter(),
+            world: self.world,
+            removed: &self.removed,
+        }
+    }
+}
+
+pub struct QueryChangedIter<'world, 'query, T: Component> {
+    iter: sparse_set::Iter<'query, ChangeStatus>,
+    world: &'world World,
+    removed: &'query Vec<T>,
+}
+
+impl<'world, 'query, T: Component> Iterator for QueryChangedIter<'world, 'query, T> {
+    type Item = EntityChanged<'world, 'query, T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let option = self.iter.next();
 
             if let Some((id, record)) = option {
-                // Ignore no change records, they are not interesting
-                if !record.is_no_change() {
-                    return Some(EntityChange::new(self.world, (*id).into(), record));
-                }
+                return Some(EntityChanged {
+                    id: (*id).into(),
+                    component: match record {
+                        ChangeStatus::Added => ComponentChanged::New(self.world),
+                        ChangeStatus::Removed(idx) => ComponentChanged::Old(&self.removed[*idx]),
+                        ChangeStatus::Modified(idx) => {
+                            ComponentChanged::Both(self.world, &self.removed[*idx])
+                        }
+                    },
+                });
             } else {
                 return None;
             }

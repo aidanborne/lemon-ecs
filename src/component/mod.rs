@@ -8,7 +8,7 @@ mod bundle;
 pub use bundle::*;
 
 pub trait Component: AsAny {
-    fn get_storage(&self) -> Box<dyn ComponentVec>;
+    fn as_empty_vec(&self) -> Box<dyn ComponentVec>;
 }
 
 impl_downcast!(dyn Component);
