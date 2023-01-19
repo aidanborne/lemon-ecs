@@ -1,8 +1,9 @@
-use std::{any::TypeId, collections::HashSet, marker::PhantomData};
+use std::marker::PhantomData;
 
 use crate::{
     changes::{AddedIter, ChangeRecord, EntitySnapshot, ModifiedIter, RemovedIter, SnapshotIter},
     component::Component,
+    entities::Archetype,
     world::World,
 };
 
@@ -19,13 +20,13 @@ pub use self::iter::*;
 
 pub trait QuerySelector: 'static {
     /// Returns true if the query should be run for the given archetype.
-    fn filter(type_ids: &HashSet<TypeId>) -> bool;
+    fn filter(type_ids: &Archetype) -> bool;
 }
 
 macro_rules! impl_tuple_selector {
     ($($t:ident),*) => {
         impl<$($t: QuerySelector),*> QuerySelector for ($($t,)*) {
-            fn filter(_type_ids: &HashSet<TypeId>) -> bool {
+            fn filter(_type_ids: &Archetype) -> bool {
                 $($t::filter(_type_ids) &&)* true
             }
         }

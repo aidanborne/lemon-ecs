@@ -1,6 +1,6 @@
 use std::{
     any::{Any, TypeId},
-    collections::{HashMap, HashSet},
+    collections::HashMap,
 };
 
 use crate::{
@@ -108,18 +108,16 @@ impl World {
         }
 
         let archetype = archetype.unwrap();
-        let hash_set: HashSet<TypeId> = archetype.type_ids();
-
-        let mut consumed = None;
 
         let changes = &mut changes.into_iter();
+        let mut consumed = None;
 
         for change in changes.by_ref() {
             match change {
                 ComponentChange::Insert(component) => {
                     let type_id = (*component).as_any().type_id();
 
-                    if hash_set.contains(&type_id) {
+                    if archetype.has_component(type_id) {
                         let changed = archetype.replace_component(id, component);
 
                         self.changes.mark_changed(id, changed);
@@ -129,7 +127,7 @@ impl World {
                     }
                 }
                 ComponentChange::Remove(type_id) => {
-                    if hash_set.contains(&type_id) {
+                    if archetype.has_component(type_id) {
                         consumed = Some(change);
                         break;
                     }

@@ -1,14 +1,14 @@
 use std::ops::Deref;
 
+use crate::component::Component;
+
 mod archetype;
 mod archetypes;
 mod iter;
 
-pub(crate) use archetype::*;
+pub use archetype::*;
 pub(crate) use archetypes::*;
 pub use iter::*;
-
-use crate::component::Component;
 
 pub(crate) struct Entities {
     available_ids: Vec<usize>,

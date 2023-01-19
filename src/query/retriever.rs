@@ -1,10 +1,10 @@
 use lemon_ecs_macros::all_tuples;
 
-use std::{any::TypeId, collections::HashSet};
+use std::any::TypeId;
 
 use crate::{
     component::Component,
-    entities::{Entity, EntityId},
+    entities::{Archetype, Entity, EntityId},
 };
 
 use super::QuerySelector;
@@ -28,8 +28,8 @@ impl<T: 'static + Component> QueryRetriever for T {
 
 impl<T: 'static + Component> QuerySelector for T {
     #[inline]
-    fn filter(type_ids: &HashSet<TypeId>) -> bool {
-        type_ids.contains(&TypeId::of::<T>())
+    fn filter(archetype: &Archetype) -> bool {
+        archetype.has_component(TypeId::of::<T>())
     }
 }
 
@@ -43,7 +43,7 @@ impl QueryRetriever for EntityId {
 
 impl QuerySelector for EntityId {
     #[inline]
-    fn filter(_type_ids: &HashSet<TypeId>) -> bool {
+    fn filter(_archetype: &Archetype) -> bool {
         true
     }
 }

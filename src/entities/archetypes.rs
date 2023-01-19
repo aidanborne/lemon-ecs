@@ -1,14 +1,11 @@
-use std::{
-    any::TypeId,
-    collections::{HashMap, HashSet},
-};
+use std::{any::TypeId, collections::HashMap};
 
 use crate::{component::Component, query::QuerySelector};
 
 use super::{Archetype, EntityId, EntityIter, IdIter, Indices};
 
 struct QueryResult {
-    filter: fn(&HashSet<TypeId>) -> bool,
+    filter: fn(&Archetype) -> bool,
     indices: Vec<usize>,
 }
 
@@ -38,16 +35,14 @@ impl Archetypes {
             .map(|component| component.as_any().type_id())
             .collect();
 
-        let hash_set: HashSet<TypeId> = type_ids.iter().cloned().collect();
-
         let idx = self.bundle_cache.entry(type_ids).or_insert_with(|| {
             let idx = self.archetypes.len();
 
-            let archetype = Archetype::from_components(components);
-            self.archetypes.push(archetype);
+            self.archetypes.push(Archetype::from_components(components));
+            let archetype = &self.archetypes[idx];
 
             for cache in self.query_cache.values_mut() {
-                if (cache.filter)(&hash_set) {
+                if (cache.filter)(&archetype) {
                     cache.indices.push(idx);
                 }
             }
@@ -71,7 +66,7 @@ impl Archetypes {
                     .iter()
                     .enumerate()
                     .filter_map(|(idx, archetype)| {
-                        if T::filter(&archetype.type_ids()) {
+                        if T::filter(archetype) {
                             Some(idx)
                         } else {
                             None

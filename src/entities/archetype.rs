@@ -7,7 +7,7 @@ use crate::{
 
 use super::EntityId;
 
-pub(crate) struct Archetype {
+pub struct Archetype {
     entities: SparseSet<()>,
     components: HashMap<TypeId, Box<dyn ComponentVec>>,
 }
@@ -75,6 +75,7 @@ impl Archetype {
         self.entities.contains(*id)
     }
 
+    #[inline]
     pub fn has_component(&self, type_id: TypeId) -> bool {
         self.components.contains_key(&type_id)
     }
@@ -100,11 +101,7 @@ impl Archetype {
         None
     }
 
-    pub fn entities(&self) -> &SparseSet<()> {
+    pub(crate) fn entities(&self) -> &SparseSet<()> {
         &self.entities
-    }
-
-    pub fn type_ids(&self) -> std::collections::HashSet<TypeId> {
-        self.components.keys().cloned().collect()
     }
 }
