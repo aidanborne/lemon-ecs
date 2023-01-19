@@ -1,3 +1,4 @@
+pub mod buffer;
 pub mod changes;
 pub mod collections;
 pub mod component;

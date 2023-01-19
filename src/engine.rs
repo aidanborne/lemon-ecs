@@ -21,8 +21,6 @@ impl Engine {
         for system in self.systems.iter_mut() {
             system.update(&mut self.world);
         }
-
-        self.world.process_updates();
     }
 }
 

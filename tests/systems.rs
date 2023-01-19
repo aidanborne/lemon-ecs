@@ -1,23 +1,26 @@
 use lemon_ecs::{
-    engine::Engine,
-    entities::EntityId,
-    world::{World, WorldBuffer},
+    buffer::WorldBuffer, engine::Engine, entities::EntityId, query::Without, world::World,
 };
 
 mod common;
 use common::components::{Name, Position, Velocity};
 
-/*fn print_system(world: &mut World) {
-    let buffer = WorldBuffer::new(world);
+fn print_system(world: &mut World) {
+    let mut buffer = WorldBuffer::new();
 
-    for (id, position, velocity) in world.query::<(EntityId, Position, Velocity)>() {
-        buffer.insert(
-            id,
-            Position(position.0 + velocity.0, position.1 + velocity.1),
-        );
-
-        buffer.spawn((Name("Hello".to_string()), Velocity(3, 4)));
+    for (id, position, velocity) in world
+        .query::<(EntityId, Position, Velocity)>()
+        .filter::<Without<Name>>()
+    {
+        let new_position = Position(position.0 + velocity.0, position.1 + velocity.1);
+        buffer.insert(id, new_position);
     }
+
+    buffer
+        .spawn((Name("Hello".to_string()), Velocity(5, 6)))
+        .insert(Position(7, 8));
+
+    world.apply_buffer(buffer);
 }
 
 #[test]
@@ -39,13 +42,16 @@ pub fn engine_run() {
         "Position should be (31, 42)"
     );
 
-    let mut query = engine.query::<(Name, Velocity)>().into_iter();
+    let mut query = engine.query::<(Name, Velocity, Position)>().into_iter();
 
-    let (name, velocity) = query.next().unwrap();
+    for _ in 0..10 {
+        let (name, velocity, position) = query.next().unwrap();
 
-    assert_eq!(name.0, "Hello", "Name should be 'Hello'");
-    assert_eq!(velocity, &Velocity(3, 4), "Velocity should be (3, 4)");
-}*/
+        assert_eq!(name.0, "Hello", "Name should be 'Hello'");
+        assert_eq!(velocity, &Velocity(5, 6), "Velocity should be (5, 6)");
+        assert_eq!(position, &Position(7, 8), "Position should be (7, 8)");
+    }
+}
 
 #[derive(Clone)]
 struct Counter {

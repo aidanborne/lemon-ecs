@@ -32,20 +32,23 @@ impl ChangeDetection {
 
     /// Marks the component as added for the given entity.
     pub fn mark_added(&mut self, id: EntityId, type_id: TypeId) {
-        let record = self.get_mut_record(type_id);
-        record.map(|r| r.mark_added(id));
+        if let Some(record) = self.get_mut_record(type_id) {
+            record.mark_added(id);
+        }
     }
 
     /// Marks the component as removed for the given entity.
     pub fn mark_removed(&mut self, id: EntityId, component: Box<dyn Component>) {
-        let record = self.get_mut_record((*component).as_any().type_id());
-        record.map(|r| r.mark_removed(id, component));
+        if let Some(record) = self.get_mut_record((*component).as_any().type_id()) {
+            record.mark_removed(id, component);
+        }
     }
 
     /// Marks the component as changed for the given entity.
     pub fn mark_changed(&mut self, id: EntityId, component: Box<dyn Component>) {
-        let record = self.get_mut_record((*component).as_any().type_id());
-        record.map(|r| r.mark_changed(id, component));
+        if let Some(record) = self.get_mut_record((*component).as_any().type_id()) {
+            record.mark_changed(id, component);
+        }
     }
 
     /// Indicates that a system has finished processing the given entity.

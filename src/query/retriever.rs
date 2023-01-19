@@ -26,7 +26,7 @@ impl<T: 'static + Component> QueryRetriever for T {
     }
 }
 
-impl<'a, T: 'static + Component> QuerySelector for T {
+impl<T: 'static + Component> QuerySelector for T {
     #[inline]
     fn filter(type_ids: &HashSet<TypeId>) -> bool {
         type_ids.contains(&TypeId::of::<T>())
@@ -53,11 +53,11 @@ macro_rules! impl_tuple_retriever {
         impl<$($t: QueryRetriever),*> QueryRetriever for ($($t,)*) where Self: QuerySelector {
             type Output<'world> = ($($t::Output<'world>,)*);
 
-            fn retrieve<'world>(_entity: &Entity<'world>) -> Self::Output<'world> {
-                ($($t::retrieve(_entity),)*)
+            fn retrieve<'world>(entity: &Entity<'world>) -> Self::Output<'world> {
+                ($($t::retrieve(entity),)*)
             }
         }
     };
   }
 
-all_tuples!(impl_tuple_retriever, 0..16);
+all_tuples!(impl_tuple_retriever, 1..16);

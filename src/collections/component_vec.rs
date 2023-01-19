@@ -68,6 +68,6 @@ impl<T: 'static + Component> ComponentVec for Vec<T> {
 
     #[inline]
     fn clone_empty(&self) -> Box<dyn ComponentVec> {
-        Box::new(Vec::<T>::new())
+        Box::<Vec<T>>::default()
     }
 }

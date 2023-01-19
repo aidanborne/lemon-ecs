@@ -1,27 +1,25 @@
 use std::{
     any::{Any, TypeId},
-    cell::RefCell,
     collections::{HashMap, HashSet},
 };
 
 use crate::{
-    changes::{ChangeDetection, ChangeRecord, ComponentChange},
+    buffer::WorldBuffer,
+    changes::{ChangeDetection, ChangeRecord},
     component::{Bundle, Component, TypeBundle},
     entities::{Archetypes, Entities, EntityId, EntityIter},
     query::{Query, QueryChanged, QueryRetriever, QuerySelector},
 };
 
-mod buffer;
-mod updates;
-
-pub use buffer::*;
-pub(crate) use updates::*;
+pub enum ComponentChange {
+    Insert(Box<dyn Component>),
+    Remove(TypeId),
+}
 
 #[derive(Default)]
 pub struct World {
     entities: Entities,
     archetypes: Archetypes,
-    updates: RefCell<Vec<WorldUpdate>>,
     resources: HashMap<TypeId, Box<dyn Any>>,
     changes: ChangeDetection,
     despawned: Vec<EntityId>,
@@ -65,9 +63,9 @@ impl World {
     }
 
     #[inline]
-    fn modify_bundle<Iter>(&mut self, id: EntityId, bundle: Vec<Box<dyn Component>>, changes: Iter)
+    fn modify_bundle<T>(&mut self, id: EntityId, bundle: Vec<Box<dyn Component>>, changes: T)
     where
-        Iter: Iterator<Item = ComponentChange>,
+        T: Iterator<Item = ComponentChange>,
     {
         let mut components: HashMap<TypeId, Box<dyn Component>> = bundle
             .into_iter()
@@ -76,7 +74,7 @@ impl World {
 
         for change in changes {
             match change {
-                ComponentChange::Added(component) => {
+                ComponentChange::Insert(component) => {
                     let type_id = (*component).as_any().type_id();
 
                     if let Some(changed) = components.insert(type_id, component) {
@@ -85,7 +83,7 @@ impl World {
                         self.changes.mark_added(id, type_id);
                     }
                 }
-                ComponentChange::Removed(type_id) => {
+                ComponentChange::Remove(type_id) => {
                     let removed = components.remove(&type_id);
 
                     if let Some(component) = removed {
@@ -102,7 +100,7 @@ impl World {
             .insert(id, components);
     }
 
-    fn modify_entity(&mut self, id: EntityId, mut changes: impl Iterator<Item = ComponentChange>) {
+    pub fn modify(&mut self, id: EntityId, changes: impl IntoIterator<Item = ComponentChange>) {
         let archetype = self.archetypes.entity_archetype_mut(id);
 
         if archetype.is_none() {
@@ -110,13 +108,15 @@ impl World {
         }
 
         let archetype = archetype.unwrap();
-        let hash_set: HashSet<TypeId> = archetype.type_ids(); //self.archetypes[archetype_idx].type_ids();
+        let hash_set: HashSet<TypeId> = archetype.type_ids();
 
         let mut consumed = None;
 
+        let changes = &mut changes.into_iter();
+
         for change in changes.by_ref() {
             match change {
-                ComponentChange::Added(component) => {
+                ComponentChange::Insert(component) => {
                     let type_id = (*component).as_any().type_id();
 
                     if hash_set.contains(&type_id) {
@@ -124,11 +124,11 @@ impl World {
 
                         self.changes.mark_changed(id, changed);
                     } else {
-                        consumed = Some(ComponentChange::Added(component));
+                        consumed = Some(ComponentChange::Insert(component));
                         break;
                     }
                 }
-                ComponentChange::Removed(type_id) => {
+                ComponentChange::Remove(type_id) => {
                     if hash_set.contains(&type_id) {
                         consumed = Some(change);
                         break;
@@ -147,13 +147,13 @@ impl World {
         let changes = components
             .components()
             .into_iter()
-            .map(|component| ComponentChange::Added(component));
+            .map(|component| ComponentChange::Insert(component));
 
-        self.modify_entity(id, changes);
+        self.modify(id, changes);
     }
 
     pub fn remove<T: TypeBundle>(&mut self, id: EntityId) {
-        self.modify_entity(id, T::type_ids().into_iter().map(ComponentChange::Removed));
+        self.modify(id, T::type_ids().into_iter().map(ComponentChange::Remove));
     }
 
     pub fn get_component<T: 'static + Component>(&self, id: EntityId) -> Option<&T> {
@@ -203,21 +203,12 @@ impl World {
         self.resources.insert(TypeId::of::<T>(), Box::new(resource));
     }
 
-    pub(crate) fn process_updates(&mut self) {
-        let updates = std::mem::take(&mut *self.updates.borrow_mut());
-        WorldUpdate::process(self, updates);
-
-        self.despawned.retain(|&id| {
-            if self.changes.contains(id) {
-                self.entities.despawn(*id);
-                false
-            } else {
-                true
-            }
-        });
+    pub(crate) fn insert_resource_boxed(&mut self, resource: Box<dyn Any>) {
+        self.resources.insert((*resource).type_id(), resource);
     }
 
-    pub(crate) fn push_update(&self, update: WorldUpdate) {
-        self.updates.borrow_mut().push(update);
+    #[inline]
+    pub fn apply_buffer(&mut self, buffer: WorldBuffer) {
+        buffer.apply_world(self);
     }
 }

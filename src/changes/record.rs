@@ -28,14 +28,14 @@ impl ChangeRecord {
     pub fn from_type<T: Component>() -> Self {
         Self {
             entities: SparseSet::new(),
-            removed: Box::new(Vec::<T>::new()),
+            removed: Box::<Vec<T>>::default(),
         }
     }
 
     pub fn from_ids<T: Component>(ids: impl Iterator<Item = EntityId>) -> Self {
         Self {
             entities: SparseSet::from_iter(ids.map(|id| (*id, ChangeStatus::Added))),
-            removed: Box::new(Vec::<T>::new()),
+            removed: Box::<Vec<T>>::default(),
         }
     }
 
