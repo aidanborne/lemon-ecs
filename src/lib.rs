@@ -1,10 +1,10 @@
 pub mod buffer;
 pub mod changes;
-pub mod collections;
 pub mod component;
 pub mod engine;
 pub mod entities;
 pub mod query;
+pub mod sparse_set;
 pub mod system;
 pub mod world;
 

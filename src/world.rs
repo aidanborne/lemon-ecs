@@ -7,7 +7,7 @@ use crate::{
     buffer::WorldBuffer,
     changes::{ChangeDetection, ChangeRecord},
     component::{Bundle, Component, TypeBundle},
-    entities::{Archetypes, Entities, EntityId, EntityIter},
+    entities::{Archetypes, EntityId, EntityIter, IdGenerator},
     query::{Query, QueryChanged, QueryRetriever, QuerySelector},
 };
 
@@ -18,7 +18,7 @@ pub enum ComponentChange {
 
 #[derive(Default)]
 pub struct World {
-    entities: Entities,
+    entities: IdGenerator,
     archetypes: Archetypes,
     resources: HashMap<TypeId, Box<dyn Any>>,
     changes: ChangeDetection,
@@ -27,8 +27,7 @@ pub struct World {
 
 impl World {
     pub fn spawn(&mut self, components: impl Bundle) -> EntityId {
-        let id = self.entities.spawn().into();
-
+        let id = self.entities.spawn();
         let bundle = components.components();
 
         self.archetypes
@@ -47,10 +46,10 @@ impl World {
                 if !self.changes.contains(id) {
                     self.despawned.push(id);
                 } else {
-                    self.entities.despawn(*id);
+                    self.entities.despawn(id);
                 }
             } else {
-                self.entities.despawn(*id);
+                self.entities.despawn(id);
             }
         }
     }

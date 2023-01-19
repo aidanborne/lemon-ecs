@@ -1,6 +1,6 @@
 use std::iter::Enumerate;
 
-use crate::collections::sparse_set;
+use crate::sparse_set;
 
 use super::{Archetype, Entity, EntityId};
 
@@ -16,7 +16,7 @@ impl<'archetypes> Iterator for ArchetypeIter<'archetypes> {
         match self.entities.next() {
             Some((idx, (id, _))) => Some(Entity {
                 archetype: self.archetype,
-                id: (*id).into(),
+                id: *id,
                 idx,
             }),
             None => None,
@@ -105,7 +105,7 @@ impl<'archetype> Iterator for IdIter<'archetype> {
         loop {
             match self.iter.as_mut() {
                 Some(iter) => match iter.next() {
-                    Some((id, _)) => return Some((*id).into()),
+                    Some((id, _)) => return Some(*id),
                     None => self.iter = None,
                 },
                 None => match self.archetypes.next() {

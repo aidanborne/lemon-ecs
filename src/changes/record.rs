@@ -1,7 +1,7 @@
 use crate::{
-    collections::{ComponentVec, SparseSet},
-    component::Component,
+    component::{Component, ComponentVec},
     entities::EntityId,
+    sparse_set::SparseSet,
 };
 
 pub(crate) enum ChangeStatus {
@@ -34,30 +34,30 @@ impl ChangeRecord {
 
     pub fn from_ids<T: Component>(ids: impl Iterator<Item = EntityId>) -> Self {
         Self {
-            entities: SparseSet::from_iter(ids.map(|id| (*id, ChangeStatus::Added))),
+            entities: SparseSet::from_iter(ids.map(|id| (id, ChangeStatus::Added))),
             removed: Box::<Vec<T>>::default(),
         }
     }
 
     /// Marks the component as added for the given entity.
     pub fn mark_added(&mut self, id: EntityId) {
-        match self.entities.get_mut(*id) {
+        match self.entities.get_mut(id) {
             Some(status) => match status {
                 ChangeStatus::Removed(id) => *status = ChangeStatus::Modified(*id),
                 _ => panic!("Cannot add a component that was already added."),
             },
             None => {
-                self.entities.insert(*id, ChangeStatus::Added);
+                self.entities.insert(id, ChangeStatus::Added);
             }
         }
     }
 
     /// Marks the component as removed for the given entity.
     pub fn mark_removed(&mut self, id: EntityId, removed: Box<dyn Component>) {
-        match self.entities.get_mut(*id) {
+        match self.entities.get_mut(id) {
             Some(status) => match status {
                 ChangeStatus::Added => {
-                    self.entities.remove(*id);
+                    self.entities.remove(id);
                 }
                 ChangeStatus::Modified(id) => {
                     self.removed.replace(*id, removed);
@@ -69,14 +69,14 @@ impl ChangeRecord {
             },
             None => {
                 self.entities
-                    .insert(*id, ChangeStatus::Removed(self.removed.push(removed)));
+                    .insert(id, ChangeStatus::Removed(self.removed.push(removed)));
             }
         }
     }
 
     /// Marks the component as changed for the given entity.
     pub fn mark_changed(&mut self, id: EntityId, removed: Box<dyn Component>) {
-        match self.entities.get_mut(*id) {
+        match self.entities.get_mut(id) {
             Some(status) => match status {
                 ChangeStatus::Added | ChangeStatus::Modified(_) => {}
                 ChangeStatus::Removed(_) => {
@@ -85,12 +85,12 @@ impl ChangeRecord {
             },
             None => {
                 self.entities
-                    .insert(*id, ChangeStatus::Modified(self.removed.push(removed)));
+                    .insert(id, ChangeStatus::Modified(self.removed.push(removed)));
             }
         }
     }
 
     pub fn contains(&self, id: EntityId) -> bool {
-        self.entities.contains(*id)
+        self.entities.contains(id)
     }
 }

@@ -42,7 +42,7 @@ impl Archetypes {
             let archetype = &self.archetypes[idx];
 
             for cache in self.query_cache.values_mut() {
-                if (cache.filter)(&archetype) {
+                if (cache.filter)(archetype) {
                     cache.indices.push(idx);
                 }
             }

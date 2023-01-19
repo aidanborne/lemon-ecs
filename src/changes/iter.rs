@@ -1,4 +1,4 @@
-use crate::{collections::sparse_set, component::Component, entities::EntityId, world::World};
+use crate::{component::Component, entities::EntityId, sparse_set, world::World};
 
 use super::{ChangeRecord, ChangeStatus};
 
@@ -77,10 +77,7 @@ impl<'world, T: Component> Iterator for SnapshotIter<'world, T> {
                 ),
             };
 
-            EntitySnapshot {
-                id: id.into(),
-                component,
-            }
+            EntitySnapshot { id, component }
         })
     }
 }
@@ -113,8 +110,8 @@ impl<'world, T: Component> Iterator for AddedIter<'world, T> {
                     ChangeStatus::Added | ChangeStatus::Modified(_) => {
                         return self
                             .world
-                            .get_component(id.into())
-                            .map(|component| (id.into(), component))
+                            .get_component(id)
+                            .map(|component| (id, component))
                     }
                     _ => continue,
                 }
@@ -149,8 +146,6 @@ impl<'world, T: Component> Iterator for ModifiedIter<'world, T> {
             let option = self.iter.next();
 
             if let Some((id, status)) = option {
-                let id = id.into();
-
                 match status {
                     ChangeStatus::Modified(idx) | ChangeStatus::Removed(idx) => {
                         return Some((
@@ -192,7 +187,7 @@ impl<T: Component> Iterator for RemovedIter<T> {
             if let Some((id, status)) = option {
                 match status {
                     ChangeStatus::Modified(idx) | ChangeStatus::Removed(idx) => {
-                        return Some((id.into(), std::mem::take(&mut self.removed[idx]).unwrap()))
+                        return Some((id, std::mem::take(&mut self.removed[idx]).unwrap()))
                     }
                     _ => continue,
                 }

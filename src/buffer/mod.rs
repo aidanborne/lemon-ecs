@@ -1,9 +1,9 @@
 use std::any::Any;
 
 use crate::{
-    collections::SparseSet,
     component::{Bundle, TypeBundle},
     entities::EntityId,
+    sparse_set::SparseSet,
     world::World,
 };
 
@@ -36,13 +36,13 @@ impl WorldBuffer {
 
     pub fn despawn(&mut self, id: EntityId) {
         self.despawned_entities.push(id);
-        self.existing_entities.remove(*id);
+        self.existing_entities.remove(id);
     }
 
     pub fn insert(&mut self, id: EntityId, components: impl Bundle) -> &mut ExistingEntityBuffer {
         let buffer = self
             .existing_entities
-            .get_or_insert_with(*id, || ExistingEntityBuffer::new(id));
+            .get_or_insert_with(id, || ExistingEntityBuffer::new(id));
 
         buffer.insert(components);
         buffer
@@ -51,7 +51,7 @@ impl WorldBuffer {
     pub fn remove<T: TypeBundle>(&mut self, id: EntityId) -> &mut ExistingEntityBuffer {
         let buffer = self
             .existing_entities
-            .get_or_insert_with(*id, || ExistingEntityBuffer::new(id));
+            .get_or_insert_with(id, || ExistingEntityBuffer::new(id));
 
         buffer.remove::<T>();
         buffer
@@ -71,7 +71,7 @@ impl WorldBuffer {
         }
 
         for (id, buffer) in self.existing_entities.into_iter() {
-            world.modify(id.into(), buffer.into_changes());
+            world.modify(id, buffer.into_changes());
         }
 
         for resource in self.resources {
