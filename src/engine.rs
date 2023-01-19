@@ -2,6 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use crate::{system::System, world::World};
 
+/// A standalone collection of `System`s and a `World`.
 #[derive(Default)]
 pub struct Engine {
     world: World,
@@ -9,18 +10,23 @@ pub struct Engine {
 }
 
 impl Engine {
-    /// Adds a system to the engine.
-    /// This is typically a function that takes a mutable reference to the world.
+    /// Pushes a `System` into the `Engine`s system list.
+    /// This is typically a function taking a mutable reference to a `World`.
     #[inline]
-    pub fn add_system(&mut self, system: impl System + 'static) {
+    pub fn push_system(&mut self, system: impl System + 'static) -> &mut Self {
         self.systems.push(Box::new(system));
+        self
     }
 
-    /// Updates the engine by running all systems in order.
-    pub fn update(&mut self) {
-        for system in self.systems.iter_mut() {
-            system.update(&mut self.world);
-        }
+    /// Updates the interal `World` by running the added `System`s.
+    pub fn run(&mut self) {
+        self.systems.run(&mut self.world);
+    }
+
+    /// Used to run a single `System` on the `World` for initialization purposes.
+    pub fn run_once(&mut self, mut system: impl System) -> &mut Self {
+        system.run(&mut self.world);
+        self
     }
 }
 

@@ -1,6 +1,6 @@
 use std::any::TypeId;
 
-use lemon_ecs_macros::{all_tuples, impl_tuple_bundle};
+use lemon_ecs_macros::{all_tuples, impl_tuple_bundles};
 
 use super::Component;
 
@@ -20,7 +20,7 @@ impl Bundle for Vec<Box<dyn Component>> {
     }
 }
 
-impl_tuple_bundle!(0..16);
+impl_tuple_bundles!(0..16);
 
 pub trait TypeBundle {
     fn type_ids() -> Vec<TypeId>;

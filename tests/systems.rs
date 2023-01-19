@@ -26,12 +26,12 @@ fn print_system(world: &mut World) {
 #[test]
 pub fn engine_run() {
     let mut engine = Engine::default();
-    engine.add_system(print_system);
+    engine.push_system(print_system);
 
     let entity = engine.spawn((Position(1, 2), Velocity(3, 4)));
 
     for _ in 0..10 {
-        engine.update();
+        engine.run();
     }
 
     let position = engine.get_component::<Position>(entity);

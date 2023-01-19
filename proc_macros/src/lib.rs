@@ -1,5 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote, ToTokens};
+
 use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
@@ -82,7 +83,7 @@ pub fn all_tuples(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
-pub fn impl_tuple_bundle(input: TokenStream) -> TokenStream {
+pub fn impl_tuple_bundles(input: TokenStream) -> TokenStream {
     let range = parse_macro_input!(input as TupleRange);
 
     let indices: Vec<Index> = (0..range.end).map(Index::from).collect();
@@ -119,7 +120,7 @@ fn is_bundle(field: &Field) -> bool {
     field.attrs.iter().any(|attr| attr.path.is_ident("bundle"))
 }
 
-fn impl_into_bundle<T: ToTokens>(
+fn impl_bundle<T: ToTokens>(
     generics: Generics,
     ident: Ident,
     fields: Punctuated<Field, Token![,]>,
@@ -158,7 +159,7 @@ fn impl_into_bundle<T: ToTokens>(
 }
 
 #[proc_macro_derive(Bundle)]
-pub fn derive_into_bundle(input: TokenStream) -> TokenStream {
+pub fn derive_bundle(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
 
     let fields = match ast.data {
@@ -167,13 +168,11 @@ pub fn derive_into_bundle(input: TokenStream) -> TokenStream {
     };
 
     match fields {
-        Fields::Named(fields) => {
-            impl_into_bundle(ast.generics, ast.ident, fields.named, |_, field| {
-                field.ident.clone().unwrap()
-            })
-        }
+        Fields::Named(fields) => impl_bundle(ast.generics, ast.ident, fields.named, |_, field| {
+            field.ident.clone().unwrap()
+        }),
         Fields::Unnamed(fields) => {
-            impl_into_bundle(ast.generics, ast.ident, fields.unnamed, |idx, _| {
+            impl_bundle(ast.generics, ast.ident, fields.unnamed, |idx, _| {
                 Index::from(idx)
             })
         }
