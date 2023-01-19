@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    changes::{ChangeDetection, ComponentChange},
+    changes::{ChangeDetection, ChangeRecord, ComponentChange},
     component::{Bundle, Component, TypeBundle},
     entities::{Archetypes, Entities, EntityId, EntityIter},
     query::{Query, QueryChanged, QueryRetriever, QuerySelector},
@@ -176,9 +176,14 @@ impl World {
         self.archetypes.query_entities::<T>()
     }
 
-    /// Returns a `QueryChanged` iterator for the given component type.
+    /// Returns a query for all entities that have changed since the last call.
+    /// Entities will not be despawned until their changes have been processed.
     pub fn query_changed<T: 'static + Component>(&mut self) -> QueryChanged<T> {
-        let record = self.changes.consume_record::<T>();
+        let record = self
+            .changes
+            .consume_record::<T>()
+            .unwrap_or_else(|| ChangeRecord::from_ids::<T>(self.archetypes.query_ids::<T>()));
+
         QueryChanged::new(self, record)
     }
 

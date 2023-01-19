@@ -14,6 +14,14 @@ impl<T> SparseSet<T> {
         }
     }
 
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            dense: Vec::with_capacity(capacity),
+            sparse: Vec::with_capacity(capacity),
+            len: 0,
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.len
     }
@@ -161,7 +169,7 @@ impl<'a, T> Iterator for Values<'a, T> {
     }
 }
 
-//pub type IntoIter<T> = std::vec::IntoIter<(usize, T)>;
+pub type IntoIter<T> = std::vec::IntoIter<(usize, T)>;
 
 impl<T> IntoIterator for SparseSet<T> {
     type Item = (usize, T);
@@ -169,5 +177,20 @@ impl<T> IntoIterator for SparseSet<T> {
 
     fn into_iter(self) -> Self::IntoIter {
         self.dense.into_iter()
+    }
+}
+
+impl<T> FromIterator<(usize, T)> for SparseSet<T> {
+    fn from_iter<I: IntoIterator<Item = (usize, T)>>(iter: I) -> Self {
+        let iter = iter.into_iter();
+        let size_hint = iter.size_hint();
+
+        let mut sparse_set = Self::with_capacity(size_hint.1.unwrap_or(size_hint.0));
+
+        for (key, value) in iter {
+            sparse_set.insert(key, value);
+        }
+
+        sparse_set
     }
 }

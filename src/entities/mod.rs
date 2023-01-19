@@ -2,9 +2,13 @@ use std::ops::Deref;
 
 mod archetype;
 mod archetypes;
+mod iter;
 
-pub use archetype::*;
-pub use archetypes::*;
+pub(crate) use archetype::*;
+pub(crate) use archetypes::*;
+pub use iter::*;
+
+use crate::component::Component;
 
 pub(crate) struct Entities {
     available_ids: Vec<usize>,
@@ -56,6 +60,7 @@ impl EntityId {
 }
 
 impl From<usize> for EntityId {
+    #[inline]
     fn from(id: usize) -> Self {
         Self::new(id)
     }
@@ -66,5 +71,21 @@ impl Deref for EntityId {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+pub struct Entity<'archetype> {
+    id: EntityId,
+    archetype: &'archetype Archetype,
+    idx: usize,
+}
+
+impl<'archetype> Entity<'archetype> {
+    pub fn id(&self) -> EntityId {
+        self.id
+    }
+
+    pub fn get_component<T: 'static + Component>(&self) -> Option<&'archetype T> {
+        self.archetype.get_component_dense::<T>(self.idx)
     }
 }

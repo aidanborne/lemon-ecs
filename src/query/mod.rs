@@ -1,10 +1,8 @@
 use std::{any::TypeId, collections::HashSet, marker::PhantomData};
 
 use crate::{
-    changes::{ChangeRecord, ChangeStatus},
-    collections::sparse_set::{self, SparseSet},
+    changes::{AddedIter, ChangeRecord, EntitySnapshot, ModifiedIter, RemovedIter, SnapshotIter},
     component::Component,
-    entities::EntityId,
     world::World,
 };
 
@@ -58,96 +56,42 @@ impl<'world, T: QueryRetriever> IntoIterator for Query<'world, T> {
     }
 }
 
-enum ComponentChanged<'world, 'query, T: Component> {
-    New(&'world World),
-    Old(&'query T),
-    Both(&'world World, &'query T),
-}
-
-pub struct EntityChanged<'world, 'query, T: Component> {
-    id: EntityId,
-    component: ComponentChanged<'world, 'query, T>,
-}
-
-impl<'world, 'query, T: Component> EntityChanged<'world, 'query, T> {
-    pub fn get_new(&self) -> Option<&'world T> {
-        match &self.component {
-            ComponentChanged::New(world) | ComponentChanged::Both(world, _) => {
-                world.get_component(self.id)
-            }
-            _ => None,
-        }
-    }
-
-    pub fn get_old(&self) -> Option<&T> {
-        match &self.component {
-            ComponentChanged::Old(old) | ComponentChanged::Both(_, old) => Some(old),
-            _ => None,
-        }
-    }
-
-    #[inline]
-    pub fn id(&self) -> EntityId {
-        self.id
-    }
-}
-
 pub struct QueryChanged<'world, T: Component> {
     world: &'world World,
-    entities: SparseSet<ChangeStatus>,
-    removed: Vec<T>,
+    record: ChangeRecord,
+    marker: std::marker::PhantomData<T>,
 }
 
 impl<'world, T: Component> QueryChanged<'world, T> {
     pub(crate) fn new(world: &'world World, record: ChangeRecord) -> Self {
         Self {
             world,
-            entities: record.entities,
-            removed: *record.removed.downcast().ok().unwrap(),
+            record,
+            marker: std::marker::PhantomData,
         }
+    }
+
+    /// Returns an iterator over all entities that have been added or changed.
+    pub fn added(self) -> AddedIter<'world, T> {
+        AddedIter::new(self.world, self.record)
+    }
+
+    /// Returns an iterator over all entities that have been changed.
+    pub fn modified(self) -> ModifiedIter<'world, T> {
+        ModifiedIter::new(self.world, self.record)
+    }
+
+    /// Returns an iterator over all entities that have been changed or removed.
+    pub fn removed(self) -> RemovedIter<T> {
+        RemovedIter::new(self.record)
     }
 }
 
-impl<'world, 'query, T: Component> IntoIterator for &'query QueryChanged<'world, T> {
-    type Item = EntityChanged<'world, 'query, T>;
-    type IntoIter = QueryChangedIter<'world, 'query, T>;
+impl<'world, T: Component> IntoIterator for QueryChanged<'world, T> {
+    type Item = EntitySnapshot<'world, T>;
+    type IntoIter = SnapshotIter<'world, T>;
 
     fn into_iter(self) -> Self::IntoIter {
-        QueryChangedIter {
-            iter: self.entities.iter(),
-            world: self.world,
-            removed: &self.removed,
-        }
-    }
-}
-
-pub struct QueryChangedIter<'world, 'query, T: Component> {
-    iter: sparse_set::Iter<'query, ChangeStatus>,
-    world: &'world World,
-    removed: &'query Vec<T>,
-}
-
-impl<'world, 'query, T: Component> Iterator for QueryChangedIter<'world, 'query, T> {
-    type Item = EntityChanged<'world, 'query, T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let option = self.iter.next();
-
-            if let Some((id, record)) = option {
-                return Some(EntityChanged {
-                    id: (*id).into(),
-                    component: match record {
-                        ChangeStatus::Added => ComponentChanged::New(self.world),
-                        ChangeStatus::Removed(idx) => ComponentChanged::Old(&self.removed[*idx]),
-                        ChangeStatus::Modified(idx) => {
-                            ComponentChanged::Both(self.world, &self.removed[*idx])
-                        }
-                    },
-                });
-            } else {
-                return None;
-            }
-        }
+        SnapshotIter::new(self.world, self.record)
     }
 }

@@ -1,14 +1,14 @@
-use std::{any::TypeId, collections::HashMap, iter::Enumerate, marker::PhantomData};
+use std::{any::TypeId, collections::HashMap};
 
 use crate::{
-    collections::{sparse_set, ComponentVec, SparseSet},
+    collections::{ComponentVec, SparseSet},
     component::Component,
 };
 
 use super::EntityId;
 
 pub(crate) struct Archetype {
-    entities: SparseSet<PhantomData<bool>>,
+    entities: SparseSet<()>,
     components: HashMap<TypeId, Box<dyn ComponentVec>>,
 }
 
@@ -44,7 +44,7 @@ impl Archetype {
 
     pub fn insert(&mut self, id: EntityId, components: Vec<Box<dyn Component>>) {
         if !self.entities.contains(*id) {
-            self.entities.insert(*id, PhantomData);
+            self.entities.insert(*id, ());
         }
 
         let dense_idx = self.entities.index_of(*id).unwrap();
@@ -80,12 +80,12 @@ impl Archetype {
     }
 
     /// Returns a reference to the component of type `T` at the given dense index.
-    pub fn get_dense_component<T: 'static + Component>(&self, loc: EntityLocation) -> Option<&T> {
+    pub fn get_component_dense<T: 'static + Component>(&self, idx: usize) -> Option<&T> {
         let type_id = TypeId::of::<T>();
 
         if let Some(boxed_components) = self.components.get(&type_id) {
             if let Some(components) = boxed_components.downcast_ref::<Vec<T>>() {
-                return components.as_slice().get(loc.idx());
+                return components.as_slice().get(idx);
             }
         }
 
@@ -94,77 +94,17 @@ impl Archetype {
 
     pub fn get_component<T: 'static + Component>(&self, id: EntityId) -> Option<&T> {
         if let Some(idx) = self.entities.index_of(*id) {
-            return self.get_dense_component::<T>(EntityLocation::new(idx));
+            return self.get_component_dense::<T>(idx);
         }
 
         None
     }
 
+    pub fn entities(&self) -> &SparseSet<()> {
+        &self.entities
+    }
+
     pub fn type_ids(&self) -> std::collections::HashSet<TypeId> {
         self.components.keys().cloned().collect()
-    }
-
-    pub fn iter(&self) -> ArchetypeIter<'_> {
-        ArchetypeIter::new(self)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(transparent)]
-pub struct EntityLocation(usize);
-
-impl EntityLocation {
-    pub fn new(idx: usize) -> Self {
-        Self(idx)
-    }
-
-    pub fn idx(&self) -> usize {
-        self.0
-    }
-}
-
-pub struct Entity<'archetype> {
-    id: EntityId,
-    archetype: &'archetype Archetype,
-    location: EntityLocation,
-}
-
-impl<'archetype> Entity<'archetype> {
-    pub fn id(&self) -> EntityId {
-        self.id
-    }
-
-    pub fn get_component<T: 'static + Component>(&self) -> Option<&'archetype T> {
-        self.archetype.get_dense_component::<T>(self.location)
-    }
-}
-
-pub(crate) struct ArchetypeIter<'archetype> {
-    entities: Enumerate<sparse_set::Iter<'archetype, PhantomData<bool>>>,
-    archetype: &'archetype Archetype,
-}
-
-impl<'archetype> ArchetypeIter<'archetype> {
-    pub fn new(archetype: &'archetype Archetype) -> Self {
-        Self {
-            entities: archetype.entities.iter().enumerate(),
-            archetype,
-        }
-    }
-}
-
-impl<'archetype> Iterator for ArchetypeIter<'archetype> {
-    type Item = Entity<'archetype>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some((idx, (id, _))) = self.entities.next() {
-            Some(Entity {
-                id: (*id).into(),
-                archetype: self.archetype,
-                location: EntityLocation::new(idx),
-            })
-        } else {
-            None
-        }
     }
 }

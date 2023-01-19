@@ -25,10 +25,16 @@ impl ChangeRecord {
         }
     }*/
 
-    #[inline]
-    pub fn from_type<T: 'static + Component>() -> Self {
+    pub fn from_type<T: Component>() -> Self {
         Self {
             entities: SparseSet::new(),
+            removed: Box::new(Vec::<T>::new()),
+        }
+    }
+
+    pub fn from_ids<T: Component>(ids: impl Iterator<Item = EntityId>) -> Self {
+        Self {
+            entities: SparseSet::from_iter(ids.map(|id| (*id, ChangeStatus::Added))),
             removed: Box::new(Vec::<T>::new()),
         }
     }
@@ -86,12 +92,5 @@ impl ChangeRecord {
 
     pub fn contains(&self, id: EntityId) -> bool {
         self.entities.contains(*id)
-    }
-
-    pub fn clone_empty(&self) -> Self {
-        Self {
-            entities: SparseSet::new(),
-            removed: self.removed.clone_empty(),
-        }
     }
 }

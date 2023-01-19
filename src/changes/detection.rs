@@ -19,15 +19,14 @@ impl ChangeDetection {
     }
 
     /// Consumes the change record for the given component type.
-    pub fn consume_record<T: 'static + Component>(&mut self) -> ChangeRecord {
+    pub fn consume_record<T: 'static + Component>(&mut self) -> Option<ChangeRecord> {
         let type_id = TypeId::of::<T>();
 
         if let Some(record) = self.records.get_mut(&type_id) {
-            std::mem::replace(record, ChangeRecord::from_type::<T>())
+            Some(std::mem::replace(record, ChangeRecord::from_type::<T>()))
         } else {
-            let record = ChangeRecord::from_type::<T>();
-            self.records.insert(type_id, record.clone_empty());
-            record
+            self.records.insert(type_id, ChangeRecord::from_type::<T>());
+            None
         }
     }
 

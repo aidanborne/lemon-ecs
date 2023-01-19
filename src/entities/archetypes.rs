@@ -1,16 +1,11 @@
 use std::{
     any::TypeId,
     collections::{HashMap, HashSet},
-    ops::{Index, IndexMut},
 };
 
 use crate::{component::Component, query::QuerySelector};
 
-use super::{archetype::ArchetypeIter, Archetype, Entity, EntityId};
-
-#[derive(Clone, Copy)]
-#[repr(transparent)]
-pub(crate) struct ArchetypeIdx(usize);
+use super::{Archetype, EntityId, EntityIter, IdIter, Indices};
 
 struct QueryResult {
     filter: fn(&HashSet<TypeId>) -> bool,
@@ -63,7 +58,7 @@ impl Archetypes {
         &mut self.archetypes[*idx]
     }
 
-    pub fn query_entities<T>(&mut self) -> EntityIter
+    fn query_indices<T>(&mut self) -> Indices<Archetype>
     where
         T: 'static + QuerySelector,
     {
@@ -90,49 +85,20 @@ impl Archetypes {
                 }
             });
 
-        EntityIter {
-            archetypes: &self.archetypes,
-            indices: result.indices.iter(),
-            iter: None,
-        }
+        Indices::new(&self.archetypes, &result.indices)
     }
-}
 
-impl Index<ArchetypeIdx> for Archetypes {
-    type Output = Archetype;
-
-    fn index(&self, idx: ArchetypeIdx) -> &Self::Output {
-        &self.archetypes[idx.0]
+    pub fn query_entities<T>(&mut self) -> EntityIter
+    where
+        T: 'static + QuerySelector,
+    {
+        self.query_indices::<T>().into()
     }
-}
 
-impl IndexMut<ArchetypeIdx> for Archetypes {
-    fn index_mut(&mut self, index: ArchetypeIdx) -> &mut Self::Output {
-        &mut self.archetypes[index.0]
-    }
-}
-
-pub struct EntityIter<'archetype> {
-    archetypes: &'archetype [Archetype],
-    indices: std::slice::Iter<'archetype, usize>,
-    iter: Option<ArchetypeIter<'archetype>>,
-}
-
-impl<'archetype> Iterator for EntityIter<'archetype> {
-    type Item = Entity<'archetype>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            match self.iter.as_mut() {
-                Some(iter) => match iter.next() {
-                    Some(entity) => return Some(entity),
-                    None => self.iter = None,
-                },
-                None => match self.indices.next() {
-                    Some(idx) => self.iter = Some(self.archetypes[*idx].iter()),
-                    None => return None,
-                },
-            }
-        }
+    pub(crate) fn query_ids<T>(&mut self) -> IdIter
+    where
+        T: 'static + QuerySelector,
+    {
+        self.query_indices::<T>().into()
     }
 }
