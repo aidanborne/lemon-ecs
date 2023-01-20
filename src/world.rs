@@ -26,13 +26,17 @@ pub struct World {
 }
 
 impl World {
-    pub fn spawn(&mut self, components: impl Bundle) -> EntityId {
+    pub fn spawn(&mut self, bundle: impl Bundle) -> EntityId {
         let id = self.entities.spawn();
-        let bundle = components.components();
+        let components = bundle.components();
+
+        for component in &components {
+            self.changes.mark_added(id, (*component).as_any().type_id());
+        }
 
         self.archetypes
-            .component_archetype(&bundle)
-            .insert(id, bundle);
+            .component_archetype(&components)
+            .insert(id, components);
         id
     }
 
